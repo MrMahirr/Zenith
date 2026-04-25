@@ -16,8 +16,8 @@ module.exports = {
       name: 'zenith-ai',
       cwd: '/home/mahir/Zenith/ai-service',
       // Conda ortamının kendi izole Python'unu doğrudan çağırıyoruz:
-      script: '/home/mahir/miniforge3/envs/zenith-ai/bin/python',
-      args: 'main.py',
+      script: 'sudo',
+      args: '/home/mahir/miniforge3/envs/zenith-ai/bin/python main.py',
       env: {
         DISPLAY: ':0'
       }
