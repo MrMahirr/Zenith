@@ -78,6 +78,8 @@ export class ZenithGateway
     _client: Socket,
     payload: { kambur_mu: boolean; mesafe: number },
   ) {
+    const previousStatus = this.postureService.getCurrentStatus();
+
     // DB'ye kaydet
     await this.postureService.saveEvent(payload);
 
@@ -87,12 +89,14 @@ export class ZenithGateway
       distance: payload.mesafe,
     });
 
-    // LED komutunu AI servisine gönder
-    this.server.emit('led_command', {
-      type: 'POSTURE',
-      color: payload.kambur_mu ? '#EF4444' : '#10B981', // Kırmızı veya Yeşil
-      duration: payload.kambur_mu ? 0 : 2000, // Kambur süresince, düzgünde 2 sn flash
-    });
+    if (previousStatus.isSlouching !== payload.kambur_mu) {
+      // LED komutunu sadece gerçek duruş değişiminde gönder
+      this.server.emit('led_command', {
+        type: 'POSTURE',
+        color: payload.kambur_mu ? '#EF4444' : '#10B981',
+        duration: payload.kambur_mu ? 0 : 2000,
+      });
+    }
   }
 
   // ──────────── NFC MODE (Python → Backend → React + LED) ────────────
