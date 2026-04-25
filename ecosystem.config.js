@@ -13,14 +13,29 @@ module.exports = {
       args: 'run dev -- --host',
     },
     {
-      name: 'zenith-ai',
+      name: 'zenith-camera',
       cwd: '/home/mahir/Zenith/ai-service',
-      // Conda ortamının kendi izole Python'unu doğrudan çağırıyoruz:
       script: 'sudo',
-      args: '/home/mahir/miniforge3/envs/zenith-ai/bin/python main.py',
-      env: {
-        DISPLAY: ':0'
-      }
+      args: '/home/mahir/miniforge3/envs/zenith-ai/bin/python main.py --service camera',
+      env: { DISPLAY: ':0' }
+    },
+    {
+      name: 'zenith-sensor',
+      cwd: '/home/mahir/Zenith/ai-service',
+      script: 'sudo',
+      args: '/home/mahir/miniforge3/envs/zenith-ai/bin/python main.py --service sensor',
+    },
+    {
+      name: 'zenith-led',
+      cwd: '/home/mahir/Zenith/ai-service',
+      script: 'sudo',
+      args: '/home/mahir/miniforge3/envs/zenith-ai/bin/python main.py --service led',
+    },
+    {
+      name: 'zenith-nfc',
+      cwd: '/home/mahir/Zenith/ai-service',
+      script: 'sudo',
+      args: '/home/mahir/miniforge3/envs/zenith-ai/bin/python main.py --service nfc',
     }
   ],
 };
