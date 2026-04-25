@@ -11,6 +11,7 @@ from config import (
     CAMERA_FRAME_EMIT_INTERVAL,
     CAMERA_RECONNECT_DELAY,
     CAMERA_URL,
+    POSTURE_EVENT_INTERVAL,
     POSTURE_THRESHOLD,
 )
 from connection_manager import ConnectionManager
@@ -104,10 +105,12 @@ class GecikmesizKamera:
 class PostureAnalyzer:
     def __init__(self):
         self.conn = ConnectionManager()
-        self.is_currently_slouching = False
+        self.is_currently_slouching = None
         self.running = False
         self.kamera_motoru = None
         self.last_frame_emit_at = 0.0
+        self.last_posture_emit_at = 0.0
+        self.last_distance = 0.0
 
         self.mp_cizim = mp.solutions.drawing_utils
         self.mp_postur = mp.solutions.pose
@@ -127,6 +130,27 @@ class PostureAnalyzer:
         self.thread = threading.Thread(target=self._process_frames, daemon=True)
         self.thread.start()
         print("[Kamera] Postur analizi baslatildi...")
+
+    def _should_emit_posture(self, slouching_detected):
+        if self.is_currently_slouching is None:
+            return True
+
+        if slouching_detected != self.is_currently_slouching:
+            return True
+
+        return (time.time() - self.last_posture_emit_at) >= POSTURE_EVENT_INTERVAL
+
+    def _emit_posture_update(self, slouching_detected, mesafe):
+        self.is_currently_slouching = slouching_detected
+        self.last_distance = float(mesafe)
+        self.last_posture_emit_at = time.time()
+        self.conn.emit(
+            "postur_durumu",
+            {
+                "kambur_mu": slouching_detected,
+                "mesafe": round(self.last_distance, 4),
+            },
+        )
 
     def _process_frames(self):
         while self.running:
@@ -155,15 +179,8 @@ class PostureAnalyzer:
                         mesafe = ortalama_omuz_y - burun_y
                         slouching_detected = bool(mesafe < POSTURE_THRESHOLD)
 
-                        if slouching_detected != self.is_currently_slouching:
-                            self.is_currently_slouching = slouching_detected
-                            self.conn.emit(
-                                "postur_durumu",
-                                {
-                                    "kambur_mu": self.is_currently_slouching,
-                                    "mesafe": round(float(mesafe), 4),
-                                },
-                            )
+                        if self._should_emit_posture(slouching_detected):
+                            self._emit_posture_update(slouching_detected, mesafe)
 
                     self.mp_cizim.draw_landmarks(
                         kare,
