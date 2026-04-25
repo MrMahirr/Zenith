@@ -1,5 +1,6 @@
 import threading
 import time
+import os
 
 from config import (
     LED_BRIGHTNESS,
@@ -52,6 +53,13 @@ class LEDController:
 
     def _initialize_hardware(self):
         if not LIBRARY_AVAILABLE:
+            return
+
+        if hasattr(os, "geteuid") and os.geteuid() != 0:
+            self.hardware_error = PermissionError(
+                "LED servisi root olmadan calisiyor; /dev/mem erisimi yok."
+            )
+            print("[LED] Root yetkisi yok. Mock mod aktif; fiziksel LED surulmeyecek.")
             return
 
         try:

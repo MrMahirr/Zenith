@@ -1,7 +1,11 @@
 import os
 from urllib.parse import urlsplit, urlunsplit
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*_args, **_kwargs):
+        print("[Config] python-dotenv bulunamadi. Ortam degiskenleri .env olmadan okunacak.")
 
 load_dotenv()
 
