@@ -13,6 +13,7 @@ except ImportError:
 
 class SensorManager:
     def __init__(self):
+        global HAS_HARDWARE
         self.conn = ConnectionManager()
         self.running = False
         
