@@ -1,4 +1,4 @@
-import { PostureData } from '../../hooks/usePosture';
+import type { PostureData } from '../../hooks/usePosture';
 import { useNavigate } from 'react-router-dom';
 import './PostureAlert.css';
 

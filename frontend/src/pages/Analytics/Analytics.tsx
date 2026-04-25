@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  LineChart, Line, AreaChart, Area, PieChart, Pie, Cell,
+  AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import './Analytics.css';
@@ -161,7 +161,7 @@ export function Analytics() {
                 />
                 <Tooltip
                   contentStyle={{ background: '#1a1f36', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }}
-                  formatter={(v: number) => [v === 1 ? 'Kambur' : 'Düzgün', 'Duruş']}
+                  formatter={(v: any) => [v === 1 ? 'Kambur' : 'Düzgün', 'Duruş']}
                 />
                 <Area type="stepAfter" dataKey="durum" stroke="#EF4444" fill="url(#postureGrad)" strokeWidth={2} />
               </AreaChart>

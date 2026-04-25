@@ -1,4 +1,4 @@
-import { ModeData } from '../../hooks/useMode';
+import type { ModeData } from '../../hooks/useMode';
 import './ModeIndicator.css';
 
 interface Props {

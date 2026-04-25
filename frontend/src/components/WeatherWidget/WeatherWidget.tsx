@@ -1,4 +1,4 @@
-import { WeatherData } from '../../hooks/useWeather';
+import type { WeatherData } from '../../hooks/useWeather';
 import './WeatherWidget.css';
 
 interface Props {
