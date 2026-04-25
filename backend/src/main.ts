@@ -22,8 +22,8 @@ async function bootstrap() {
   );
 
   const port = process.env.PORT ?? 3000;
-  await app.listen(port);
-  console.log(`\n🚀 Zenith Backend çalışıyor: http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`\n🚀 Zenith Backend çalışıyor: http://0.0.0.0:${port}`);
   console.log(`📡 WebSocket aktif: ws://localhost:${port}`);
   console.log(`📊 API endpoint'leri: http://localhost:${port}/api\n`);
 }
