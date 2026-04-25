@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AppController } from './app.controller';
 
 // Entities
 import { SensorReading } from './database/entities/sensor-reading.entity';
@@ -16,6 +17,7 @@ import { WeatherModule } from './weather/weather.module';
 import { GatewayModule } from './gateway/gateway.module';
 
 @Module({
+  controllers: [AppController],
   imports: [
     // .env dosyasını yükle
     ConfigModule.forRoot({
