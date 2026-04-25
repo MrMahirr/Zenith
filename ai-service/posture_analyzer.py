@@ -136,7 +136,14 @@ class PostureAnalyzer:
 
     def stop(self):
         self.running = False
+        
+        # Thread'in bitmesini bekle ki C++ objesi kullanımdayken silinmesin!
+        if hasattr(self, 'thread') and self.thread.is_alive():
+            self.thread.join(timeout=1.5)
+            
         if self.kamera_motoru:
             self.kamera_motoru.kapat()
+            
+        # Mediapipe objesini GÜVENLİ kapat
         self.postur.close()
         print("[Kamera] Postür analizi durduruldu.")
