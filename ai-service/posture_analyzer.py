@@ -3,15 +3,16 @@ import mediapipe as mp
 import threading
 import time
 import base64
+import urllib.request
+import numpy as np
 from config import CAMERA_URL, POSTURE_THRESHOLD
 from connection_manager import ConnectionManager
 
 class GecikmesizKamera:
     def __init__(self, url):
         self.url = url
-        self.kamera = cv2.VideoCapture(self.url)
-        self.kamera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        self.basarili, self.kare = self.kamera.read()
+        self.basarili = False
+        self.kare = None
         self.calisiyor = True
         
         self.thread = threading.Thread(target=self.guncelle, args=())
@@ -19,31 +20,37 @@ class GecikmesizKamera:
         self.thread.start()
 
     def guncelle(self):
+        bytes_data = bytes()
         while self.calisiyor:
-            if not getattr(self, 'kamera', None) or not self.kamera.isOpened():
-                time.sleep(2)
-                self.kamera = cv2.VideoCapture(self.url)
-                self.kamera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                continue
-
-            basarili, kare = self.kamera.read()
-            if basarili:
-                self.basarili, self.kare = basarili, kare
-            else:
-                # Bağlantı koptuğunda güvenli bir şekilde kapatıp yeniden denemesi için
+            try:
+                # C++ FFMPEG çökmelerini engellemek için HTTP üzerinden raw MJPEG okuması yapıyoruz
+                stream = urllib.request.urlopen(self.url, timeout=5)
+                while self.calisiyor:
+                    chunk = stream.read(4096)
+                    if not chunk:
+                        break
+                    bytes_data += chunk
+                    a = bytes_data.find(b'\xff\xd8') # JPEG Başlangıç
+                    b = bytes_data.find(b'\xff\xd9') # JPEG Bitiş
+                    if a != -1 and b != -1:
+                        jpg = bytes_data[a:b+2]
+                        bytes_data = bytes_data[b+2:]
+                        
+                        kare = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        if kare is not None:
+                            self.basarili = True
+                            self.kare = kare
+            except Exception as e:
                 self.basarili = False
-                self.kamera.release()
-                time.sleep(1)
-                
-            time.sleep(0.01) # CPU'yu yormamak için küçük bekleme
+                time.sleep(2) # Bağlantı koparsa 2 saniye bekle ve tekrar dene
 
     def oku(self):
         return self.basarili, self.kare
 
     def kapat(self):
         self.calisiyor = False
-        self.thread.join()
-        self.kamera.release()
+        if hasattr(self, 'thread') and self.thread.is_alive():
+            self.thread.join(timeout=1.0)
 
 class PostureAnalyzer:
     def __init__(self):
