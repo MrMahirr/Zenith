@@ -1,84 +1,92 @@
 import cv2
 import mediapipe as mp
-import socketio
+import threading
 import time
-import math
+from config import CAMERA_URL, POSTURE_THRESHOLD
+from connection_manager import ConnectionManager
 
-# --- Socket.io Bağlantısı ---
-sio = socketio.Client()
-
-@sio.event
-def connect():
-    print("[AI] NestJS Backend'e başarıyla bağlandı!")
-
-@sio.event
-def disconnect():
-    print("[AI] Bağlantı kesildi!")
-
-# NestJS sunucusuna bağlan
-try:
-    sio.connect('http://localhost:3000')
-except:
-    print("Hata: Backend'e bağlanılamadı. Önce NestJS'i çalıştırın.")
-
-# --- Mediapipe Kurulumu ---
-mp_pose = mp.solutions.pose
-pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-cap = cv2.VideoCapture(0) # Pi Camera veya USB WebCam
-
-# Eşik Değeri (Kendi oturuşuna göre bu 0.15 değerini biraz değiştirebilirsin)
-POSTURE_THRESHOLD = 0.15 
-is_currently_slouching = False
-
-print("Zenith AI Analizi Başlatıldı...")
-
-try:
-    while cap.isOpened():
-        success, image = cap.read()
-        if not success:
-            break
-
-        # İşlem hızını artırmak için görüntüyü RGB'ye çeviriyoruz
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        results = pose.process(image_rgb)
-
-        if results.pose_landmarks:
-            landmarks = results.pose_landmarks.landmark
-
-            # Kritik Noktalar: Burun ve Omuzlar
-            nose = landmarks[mp_pose.PoseLandmark.NOSE]
-            l_shoulder = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER]
-            r_shoulder = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER]
-
-            # Omuzların orta noktasını hesapla
-            shoulder_mid_y = (l_shoulder.y + r_shoulder.y) / 2
-            
-            # Burun ile omuz hizası arasındaki dikey mesafe
-            distance = shoulder_mid_y - nose.y
-
-            # Durum Kontrolü
-            slouching_detected = distance < POSTURE_THRESHOLD
-
-            # Sadece durum değiştiğinde sinyal gönder (Sistemi yormamak için)
-            if slouching_detected != is_currently_slouching:
-                is_currently_slouching = slouching_detected
-                
-                # NestJS'deki 'postur_durumu' dinleyicisine veriyi fırlat
-                sio.emit('postur_durumu', {
-                    'kambur_mu': is_currently_slouching,
-                    'mesafe': float(distance)
-                })
-                
-                status = "⚠️ KAMBUR" if is_currently_slouching else "✅ DUZGUN"
-                print(f"Durum Değişti: {status} | Mesafe: {distance:.3f}")
-
-        # Test için görüntüyü göster (İstemezsen kapatabilirsin)
-        # cv2.imshow('Zenith AI - Posture Analysis', image)
+class GecikmesizKamera:
+    def __init__(self, url):
+        self.kamera = cv2.VideoCapture(url)
+        self.kamera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.basarili, self.kare = self.kamera.read()
+        self.calisiyor = True
         
-        if cv2.waitKey(5) & 0xFF == 27: # ESC ile çıkış
-            break
+        self.thread = threading.Thread(target=self.guncelle, args=())
+        self.thread.daemon = True
+        self.thread.start()
 
-finally:
-    cap.release()
-    cv2.destroyAllWindows()
-    sio.disconnect()
+    def guncelle(self):
+        while self.calisiyor:
+            basarili, kare = self.kamera.read()
+            if basarili:
+                self.basarili, self.kare = basarili, kare
+            time.sleep(0.01) # CPU'yu yormamak için küçük bekleme
+
+    def oku(self):
+        return self.basarili, self.kare
+
+    def kapat(self):
+        self.calisiyor = False
+        self.thread.join()
+        self.kamera.release()
+
+class PostureAnalyzer:
+    def __init__(self):
+        self.conn = ConnectionManager()
+        self.is_currently_slouching = False
+        self.running = False
+        self.kamera_motoru = None
+        
+        self.mp_cizim = mp.solutions.drawing_utils
+        self.mp_postur = mp.solutions.pose
+        self.postur = self.mp_postur.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+
+    def start(self):
+        self.running = True
+        self.kamera_motoru = GecikmesizKamera(CAMERA_URL)
+        print("[Kamera] Postür analizi başlatıldı...")
+        
+        self.thread = threading.Thread(target=self._process_frames)
+        self.thread.daemon = True
+        self.thread.start()
+
+    def _process_frames(self):
+        while self.running:
+            basarili, kare = self.kamera_motoru.oku()
+            if not basarili or kare is None:
+                time.sleep(0.1)
+                continue
+
+            kare_rgb = cv2.cvtColor(kare, cv2.COLOR_BGR2RGB)
+            sonuclar = self.postur.process(kare_rgb)
+
+            if sonuclar.pose_landmarks:
+                noktalar = sonuclar.pose_landmarks.landmark
+                burun_y = noktalar[self.mp_postur.PoseLandmark.NOSE.value].y
+                sol_omuz_y = noktalar[self.mp_postur.PoseLandmark.LEFT_SHOULDER.value].y
+                sag_omuz_y = noktalar[self.mp_postur.PoseLandmark.RIGHT_SHOULDER.value].y
+                
+                ortalama_omuz_y = (sol_omuz_y + sag_omuz_y) / 2.0
+                mesafe = ortalama_omuz_y - burun_y
+
+                # Durum Kontrolü
+                slouching_detected = bool(mesafe < POSTURE_THRESHOLD)
+
+                # Sadece durum değiştiğinde sinyal gönder (Throttling)
+                if slouching_detected != self.is_currently_slouching:
+                    self.is_currently_slouching = slouching_detected
+                    
+                    self.conn.emit('postur_durumu', {
+                        'kambur_mu': self.is_currently_slouching,
+                        'mesafe': float(mesafe)
+                    })
+                    
+            time.sleep(0.05) # FPS'yi sınırlama
+
+    def stop(self):
+        self.running = False
+        if self.kamera_motoru:
+            self.kamera_motoru.kapat()
+        self.postur.close()
+        print("[Kamera] Postür analizi durduruldu.")

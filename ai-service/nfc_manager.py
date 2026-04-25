@@ -1,50 +1,62 @@
 import time
-import socketio
-from mfrc522 import SimpleMFRC522
-import RPi.GPIO as GPIO
+import threading
+from config import NFC_MODES
+from connection_manager import ConnectionManager
 
-# Socket.io İstemcisi
-sio = socketio.Client()
-reader = SimpleMFRC522()
+# Try to import RPi.GPIO and MFRC522, handle gracefully if not on Pi
+try:
+    import RPi.GPIO as GPIO
+    from mfrc522 import SimpleMFRC522
+    HAS_HARDWARE = True
+except ImportError:
+    HAS_HARDWARE = False
+    print("UYARI: RPi donanımı bulunamadı. NFC okuyucu mock modunda çalışacak.")
 
-# Kendi kartlarının ID numaralarını buraya ekleyeceğiz (Şimdilik örnek numaralar)
-# Hangi kart okutulursa o moda geçecek.
-KART_MODLARI = {
-    83749274923: "CODING",   # Örnek: Beyaz Kart -> Kodlama Modu
-    29384729384: "FOCUS",    # Örnek: Mavi Anahtarlık -> Odak Modu
-    11223344556: "RELAX"     # Örnek: Telefon NFC'si -> Relax Modu
-}
-
-@sio.event
-def connect():
-    print("[NFC Servisi] NestJS Backend'e bağlandı. Kart bekleniyor...")
-
-def start_nfc_reader():
-    try:
-        sio.connect('http://localhost:3000')
+class NFCManager:
+    def __init__(self):
+        self.conn = ConnectionManager()
+        self.running = False
         
-        while True:
-            # Kart okutulana kadar bekle
-            print("Kart veya NFC etiket okutun...")
-            id, text = reader.read()
-            print(f"Okunan Kart ID: {id}")
-            
-            # Okunan kartın ID'si listemizde varsa o moda geç
-            if id in KART_MODLARI:
-                yeni_mod = KART_MODLARI[id]
-                print(f"Eşleşme bulundu! Geçilen Mod: {yeni_mod}")
-                sio.emit('nfc_mode_change', yeni_mod)
-            else:
-                print("Tanınmayan kart! Sadece ID'si okundu.")
-                
-            # Arka arkaya defalarca okumasını engellemek için 2 saniye bekle
-            time.sleep(2)
-            
-    except KeyboardInterrupt:
-        print("Servis durduruldu.")
-    finally:
-        GPIO.cleanup()
-        sio.disconnect()
+        if HAS_HARDWARE:
+            self.reader = SimpleMFRC522()
 
-if __name__ == '__main__':
-    start_nfc_reader()
+    def start(self):
+        self.running = True
+        print("[NFC] Kart okuyucu servisi başlatıldı...")
+        
+        self.thread = threading.Thread(target=self._read_loop)
+        self.thread.daemon = True
+        self.thread.start()
+
+    def _read_loop(self):
+        while self.running:
+            if HAS_HARDWARE:
+                try:
+                    # Okuma işlemi bloklayıcıdır, timeout eklenemezse 
+                    # bu thead durdurulana kadar bekler
+                    id, text = self.reader.read()
+                    print(f"[NFC] Okunan Kart ID: {id}")
+                    
+                    if id in NFC_MODES:
+                        yeni_mod = NFC_MODES[id]
+                        print(f"[NFC] Eşleşme bulundu! Geçilen Mod: {yeni_mod}")
+                        self.conn.emit('nfc_mode_change', yeni_mod)
+                    else:
+                        print("[NFC] Tanınmayan kart!")
+                        
+                    time.sleep(2) # Art arda okumayı engelle
+                except Exception as e:
+                    print(f"[NFC] Okuma hatası: {e}")
+                    time.sleep(1)
+            else:
+                # Mock modu - Geliştirme için her 60 saniyede rastgele bir moda geç
+                time.sleep(60)
+
+    def stop(self):
+        self.running = False
+        if HAS_HARDWARE:
+            try:
+                GPIO.cleanup()
+            except:
+                pass
+        print("[NFC] Servis durduruldu.")

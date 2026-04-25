@@ -1,0 +1,176 @@
+/* ═══════════════════════════════════════════
+   DASHBOARD – 7" Pi Display Optimized
+   Target: 1024×600 (also responsive)
+   ═══════════════════════════════════════════ */
+
+.dashboard {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px 20px;
+  position: relative;
+  overflow: hidden;
+  background: 
+    radial-gradient(ellipse at 50% 0%, rgba(59, 130, 246, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(16, 185, 129, 0.04) 0%, transparent 50%),
+    linear-gradient(180deg, #0a0e1a 0%, #0f1629 50%, #0a0e1a 100%);
+}
+
+/* ─── Ambient Glow (mod geçişi) ─── */
+.dashboard__ambient {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--transition-mode);
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    circle at 50% 50%,
+    var(--mode-glow) 0%,
+    transparent 70%
+  );
+}
+
+.dashboard__ambient--active {
+  opacity: 1;
+  animation: ambient-pulse 2.5s ease 2;
+}
+
+@keyframes ambient-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.8; }
+}
+
+/* ─── HEADER (üst bar) ─── */
+.dashboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard__header-left,
+.dashboard__header-right {
+  flex: 0 0 auto;
+}
+
+.dashboard__header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+/* ─── CENTER (saat) ─── */
+.dashboard__center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── FOOTER (sensör kartları) ─── */
+.dashboard__footer {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Chart Button ─── */
+.dashboard__chart-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px;
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-primary);
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard__chart-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.08));
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.dashboard__chart-btn:hover::before {
+  opacity: 1;
+}
+
+.dashboard__chart-btn:active {
+  transform: scale(0.97);
+}
+
+.dashboard__chart-btn-icon {
+  font-size: 20px;
+}
+
+.dashboard__chart-btn-text {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.dashboard__chart-btn-chevron {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: var(--text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.dashboard__chart-btn:hover .dashboard__chart-btn-chevron {
+  transform: translateY(-50%) translateX(3px);
+}
+
+/* ─── Responsive: Masaüstü ─── */
+@media (min-width: 1200px) {
+  .dashboard {
+    padding: 24px 40px;
+  }
+
+  .dashboard__footer {
+    gap: 16px;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
+/* ─── Responsive: Küçük ekranlar ─── */
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 12px 14px;
+  }
+
+  .dashboard__header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dashboard__footer {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}

@@ -1,0 +1,10 @@
+python-dotenv>=1.0.0
+python-socketio>=5.11.0
+requests>=2.31.0
+opencv-python>=4.8.0
+mediapipe>=0.10.9
+smbus2>=0.4.3
+RPi.bme280>=0.2.4
+mfrc522>=0.0.7
+RPi.GPIO>=0.7.1
+rpi_ws281x>=5.0.0
