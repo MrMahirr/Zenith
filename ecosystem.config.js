@@ -17,7 +17,7 @@ module.exports = {
       cwd: '/home/mahir/zenith-workspace/ai-service',
       // Conda ortamının kendi izole Python'unu doğrudan çağırıyoruz:
       script: '/home/mahir/miniforge3/envs/zenith-ai/bin/python',
-      args: 'android_kamera.py',
+      args: 'main.py',
       env: {
         DISPLAY: ':0'
       }
