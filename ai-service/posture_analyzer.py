@@ -8,7 +8,8 @@ from connection_manager import ConnectionManager
 
 class GecikmesizKamera:
     def __init__(self, url):
-        self.kamera = cv2.VideoCapture(url)
+        self.url = url
+        self.kamera = cv2.VideoCapture(self.url)
         self.kamera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.basarili, self.kare = self.kamera.read()
         self.calisiyor = True
@@ -19,9 +20,21 @@ class GecikmesizKamera:
 
     def guncelle(self):
         while self.calisiyor:
+            if not getattr(self, 'kamera', None) or not self.kamera.isOpened():
+                time.sleep(2)
+                self.kamera = cv2.VideoCapture(self.url)
+                self.kamera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                continue
+
             basarili, kare = self.kamera.read()
             if basarili:
                 self.basarili, self.kare = basarili, kare
+            else:
+                # Bağlantı koptuğunda güvenli bir şekilde kapatıp yeniden denemesi için
+                self.basarili = False
+                self.kamera.release()
+                time.sleep(1)
+                
             time.sleep(0.01) # CPU'yu yormamak için küçük bekleme
 
     def oku(self):
