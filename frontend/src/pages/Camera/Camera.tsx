@@ -1,10 +1,24 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePosture } from '../../hooks/usePosture';
+import { socket } from '../../hooks/useSocket';
 import './Camera.css';
 
 export function Camera() {
   const navigate = useNavigate();
   const posture = usePosture();
+  const [frame, setFrame] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleFrame = (b64: string) => {
+      setFrame(`data:image/jpeg;base64,${b64}`);
+    };
+    
+    socket.on('camera_frame', handleFrame);
+    return () => {
+      socket.off('camera_frame', handleFrame);
+    };
+  }, []);
 
   return (
     <div className="camera-page">
@@ -22,12 +36,15 @@ export function Camera() {
       <main className="camera-page__content">
         <div className="camera-page__feed glass-card">
           <img 
-            src={import.meta.env.VITE_CAMERA_URL || "http://192.168.6.28:4747/video"} 
+            src={frame || import.meta.env.VITE_CAMERA_URL || "http://192.168.6.28:4747/video"} 
             alt="Kamera Canlı Akış" 
             className="camera-page__video" 
             onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              document.getElementById('camera-placeholder')!.style.display = 'block';
+              // Sadece başlangıç resmi (URL) hata verirse placeholder göster
+              if (!frame) {
+                e.currentTarget.style.display = 'none';
+                document.getElementById('camera-placeholder')!.style.display = 'block';
+              }
             }}
           />
           <div id="camera-placeholder" className="camera-page__placeholder" style={{ display: 'none' }}>

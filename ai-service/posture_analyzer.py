@@ -2,6 +2,7 @@ import cv2
 import mediapipe as mp
 import threading
 import time
+import base64
 from config import CAMERA_URL, POSTURE_THRESHOLD
 from connection_manager import ConnectionManager
 
@@ -62,6 +63,7 @@ class PostureAnalyzer:
             sonuclar = self.postur.process(kare_rgb)
 
             if sonuclar.pose_landmarks:
+                self.mp_cizim.draw_landmarks(kare, sonuclar.pose_landmarks, self.mp_postur.POSE_CONNECTIONS)
                 noktalar = sonuclar.pose_landmarks.landmark
                 burun_y = noktalar[self.mp_postur.PoseLandmark.NOSE.value].y
                 sol_omuz_y = noktalar[self.mp_postur.PoseLandmark.LEFT_SHOULDER.value].y
@@ -82,7 +84,14 @@ class PostureAnalyzer:
                         'mesafe': float(mesafe)
                     })
                     
-            time.sleep(0.05) # FPS'yi sınırlama
+            
+            # Çizimli kareyi frontend için gönder (50% kalite)
+            ret, buffer = cv2.imencode('.jpg', kare, [cv2.IMWRITE_JPEG_QUALITY, 50])
+            if ret:
+                frame_b64 = base64.b64encode(buffer).decode('utf-8')
+                self.conn.emit('kamera_kare', frame_b64)
+                
+            time.sleep(0.05) # FPS'yi sınırlama (Maks ~20 FPS)
 
     def stop(self):
         self.running = False

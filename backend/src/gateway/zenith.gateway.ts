@@ -68,6 +68,11 @@ export class ZenithGateway
 
   // ──────────── POSTURE (Python → Backend → React + LED) ────────────
 
+  @SubscribeMessage('kamera_kare')
+  handleKameraKare(_client: Socket, frameB64: string) {
+    this.server.emit('camera_frame', frameB64);
+  }
+
   @SubscribeMessage('postur_durumu')
   async handlePostureDurumu(
     _client: Socket,
