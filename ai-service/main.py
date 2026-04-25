@@ -1,6 +1,7 @@
 import argparse
+import signal
 import sys
-import time
+from threading import Event
 
 from connection_manager import ConnectionManager
 
@@ -41,8 +42,17 @@ def main():
     print(f"   ZENITH {args.service.upper()} SERVISI BASLATILIYOR")
     print("==============================================\n")
 
+    stop_event = Event()
     conn = ConnectionManager()
     service = None
+
+    def _request_shutdown(signum, _frame):
+        signal_name = signal.Signals(signum).name
+        print(f"\n[Sistem] Kapatilma sinyali alindi: {signal_name}")
+        stop_event.set()
+
+    signal.signal(signal.SIGINT, _request_shutdown)
+    signal.signal(signal.SIGTERM, _request_shutdown)
 
     try:
         conn.connect(wait_for_backend=True)
@@ -51,10 +61,11 @@ def main():
 
         print(f"\n[{args.service.upper()}] Servis aktif. Cikmak icin Ctrl+C.\n")
 
-        while True:
-            time.sleep(1)
+        while not stop_event.wait(1):
+            pass
     except KeyboardInterrupt:
         print("\n[Sistem] Kapatilma istegi alindi...")
+        stop_event.set()
     finally:
         print(f"[Sistem] {args.service.upper()} servisi guvenli sekilde kapatiliyor...")
         if service:
