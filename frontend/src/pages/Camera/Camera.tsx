@@ -36,28 +36,21 @@ export function Camera() {
 
       <main className="camera-page__content">
         <div className="camera-page__feed glass-card">
-          <img 
-            src={frame || import.meta.env.VITE_CAMERA_URL || "http://192.168.6.28:4747/video"} 
-            alt="Kamera Canlı Akış" 
-            className="camera-page__video" 
-            onError={(e) => {
-              // Sadece başlangıç resmi (URL) hata verirse placeholder göster
-              if (!frame) {
-                e.currentTarget.style.display = 'none';
-                document.getElementById('camera-placeholder')!.style.display = 'block';
-              }
-            }}
-          />
-          <div id="camera-placeholder" className="camera-page__placeholder" style={{ display: 'none' }}>
-            <span className="camera-page__placeholder-icon">📷</span>
-            <p className="camera-page__placeholder-text">
-              Kamera akışı şu an alınamıyor.<br />
-              Telefonunuzun aynı ağda olduğundan emin olun.
-            </p>
-            <p className="camera-page__placeholder-sub">
-              Denenen IP: <code>{import.meta.env.VITE_CAMERA_URL || "http://192.168.6.28:4747/video"}</code>
-            </p>
-          </div>
+          {frame ? (
+            <img 
+              src={frame} 
+              alt="Kamera Canlı Akış" 
+              className="camera-page__video" 
+            />
+          ) : (
+            <div className="camera-page__placeholder">
+              <span className="camera-page__placeholder-icon">🤖</span>
+              <p className="camera-page__placeholder-text">
+                Yapay Zeka (Python) kameraya bağlanıyor...<br />
+                Lütfen bekleyin. (Görüntü işlenerek buraya aktarılacak)
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="camera-page__info">
