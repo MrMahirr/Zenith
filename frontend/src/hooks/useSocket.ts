@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const BACKEND_URL = 'http://localhost:3000';
+const BACKEND_URL = `http://${window.location.hostname}:3000`;
 
 let socketInstance: Socket | null = null;
 
