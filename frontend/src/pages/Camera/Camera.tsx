@@ -21,15 +21,23 @@ export function Camera() {
 
       <main className="camera-page__content">
         <div className="camera-page__feed glass-card">
-          {/* IP kamera stream'i buraya gelecek */}
-          <div className="camera-page__placeholder">
+          <img 
+            src={import.meta.env.VITE_CAMERA_URL || "http://192.168.6.28:4747/video"} 
+            alt="Kamera Canlı Akış" 
+            className="camera-page__video" 
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              document.getElementById('camera-placeholder')!.style.display = 'block';
+            }}
+          />
+          <div id="camera-placeholder" className="camera-page__placeholder" style={{ display: 'none' }}>
             <span className="camera-page__placeholder-icon">📷</span>
             <p className="camera-page__placeholder-text">
-              Kamera akışı Pi üzerinde aktif olduğunda<br />
-              burada canlı görüntü gösterilecek.
+              Kamera akışı şu an alınamıyor.<br />
+              Telefonunuzun aynı ağda olduğundan emin olun.
             </p>
             <p className="camera-page__placeholder-sub">
-              IP Kamera URL: <code>http://192.168.6.28:4747/video</code>
+              Denenen IP: <code>{import.meta.env.VITE_CAMERA_URL || "http://192.168.6.28:4747/video"}</code>
             </p>
           </div>
         </div>
