@@ -31,6 +31,7 @@ class ConnectionManager:
             request_timeout=5,
         )
         self.is_connected = False
+        self._shutting_down = False
         self._waiting_for_backend_logged = False
         self._connect_error_logged = False
 
@@ -43,7 +44,7 @@ class ConnectionManager:
 
         @self.sio.event
         def disconnect():
-            if self.is_connected:
+            if self.is_connected and not self._shutting_down:
                 print("[Baglanti] Backend baglantisi koptu. Yeniden baglaniliyor...")
             self.is_connected = False
 
@@ -93,6 +94,7 @@ class ConnectionManager:
         if self.is_connected or self.sio.connected:
             return True
 
+        self._shutting_down = False
         deadline = self._get_deadline(timeout)
 
         if wait_for_backend:
@@ -130,4 +132,5 @@ class ConnectionManager:
 
     def disconnect(self):
         if self.is_connected or self.sio.connected:
+            self._shutting_down = True
             self.sio.disconnect()

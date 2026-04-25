@@ -3,8 +3,13 @@ module.exports = {
     {
       name: 'zenith-backend',
       cwd: '/home/mahir/Zenith/backend',
-      script: 'npm',
-      args: 'run start',
+      script: 'node',
+      args: 'dist/main.js',
+      interpreter: 'none',
+      exec_mode: 'fork',
+      autorestart: true,
+      restart_delay: 2000,
+      kill_timeout: 5000,
     },
     {
       name: 'zenith-frontend',
