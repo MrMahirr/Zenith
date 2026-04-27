@@ -11,13 +11,20 @@
 }
 
 :root {
-  /* ─── Color Palette ─── */
+  /* ─── Color Palette (Dinamik Tema Değişkenleri Fallback'leri) ─── */
   --bg-primary: #0a0e1a;
   --bg-secondary: #111827;
   --bg-card: rgba(255, 255, 255, 0.04);
   --bg-card-hover: rgba(255, 255, 255, 0.07);
+  
+  --gradient-1: rgba(148, 163, 184, 0.05);
+  --gradient-2: rgba(56, 189, 248, 0.03);
+
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-glow: rgba(255, 255, 255, 0.12);
+
+  --accent: #94A3B8;
+  --accent-glow: rgba(148, 163, 184, 0.2);
 
   --text-primary: #f1f5f9;
   --text-secondary: rgba(241, 245, 249, 0.6);
@@ -74,6 +81,7 @@ html, body {
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background var(--transition-mode), color var(--transition-mode);
 }
 
 #root {

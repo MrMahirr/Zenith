@@ -11,9 +11,9 @@
   padding: 16px 20px;
   overflow-y: auto;
   background:
-    radial-gradient(ellipse at 70% 0%, rgba(245, 158, 11, 0.05) 0%, transparent 60%),
-    radial-gradient(ellipse at 10% 100%, rgba(99, 102, 241, 0.04) 0%, transparent 50%),
-    linear-gradient(180deg, #0a0e1a 0%, #0f1629 100%);
+    radial-gradient(ellipse at 70% 0%, var(--gradient-1) 0%, transparent 60%),
+    radial-gradient(ellipse at 10% 100%, var(--gradient-2) 0%, transparent 50%),
+    linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
 }
 
 /* ─── Header ─── */
