@@ -48,14 +48,18 @@ class NFCManager:
             if self.has_hardware and self.reader is not None:
                 try:
                     card_id, text = self.reader.read()
-                    print(f"[NFC] Okunan Kart ID: {card_id}")
-
-                    if card_id in NFC_MODES:
-                        yeni_mod = NFC_MODES[card_id]
-                        print(f"[NFC] Eslesme bulundu. Gecilen Mod: {yeni_mod}")
-                        self.conn.emit("nfc_mode_change", yeni_mod)
-                    else:
-                        print("[NFC] Taninmayan kart!")
+                    # Convert card_id to hex format for consistency (optional but recommended)
+                    # SimpleMFRC522 returns integer ID.
+                    uid_hex = hex(card_id)[2:].upper()
+                    # Add colons for MAC-like format (e.g., AA:BB:CC:DD)
+                    # MFRC522 typical ID length is 4 or 5 bytes
+                    # If it's a simple integer, we can just send it as a string
+                    uid_str = str(card_id)
+                    
+                    print(f"[NFC] Okunan Kart ID: {uid_str}")
+                    
+                    # Backend'e nfc_chip_scanned event'i gönder
+                    self.conn.emit("nfc_chip_scanned", {"uid": uid_str})
 
                     time.sleep(2)
                 except Exception as exc:
