@@ -75,6 +75,15 @@ export function Dashboard() {
           <span className="dashboard__chart-btn-text">İstatistik</span>
           <span className="dashboard__chart-btn-chevron">›</span>
         </button>
+        <button
+          className="dashboard__chart-btn glass-card"
+          onClick={() => navigate('/nfc')}
+          id="nfc-btn"
+        >
+          <span className="dashboard__chart-btn-icon">📱</span>
+          <span className="dashboard__chart-btn-text">NFC</span>
+          <span className="dashboard__chart-btn-chevron">›</span>
+        </button>
       </footer>
     </div>
   );

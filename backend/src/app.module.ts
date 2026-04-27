@@ -8,6 +8,8 @@ import { AppController } from './app.controller';
 import { SensorReading } from './database/entities/sensor-reading.entity';
 import { PostureEvent } from './database/entities/posture-event.entity';
 import { ModeChange } from './database/entities/mode-change.entity';
+import { NfcChip } from './database/entities/nfc-chip.entity';
+import { NfcScanLog } from './database/entities/nfc-scan-log.entity';
 
 // Feature Modules
 import { SensorModule } from './sensor/sensor.module';
@@ -15,6 +17,7 @@ import { PostureModule } from './posture/posture.module';
 import { ModeModule } from './mode/mode.module';
 import { WeatherModule } from './weather/weather.module';
 import { GatewayModule } from './gateway/gateway.module';
+import { NfcModule } from './nfc/nfc.module';
 
 @Module({
   controllers: [AppController],
@@ -28,7 +31,7 @@ import { GatewayModule } from './gateway/gateway.module';
     TypeOrmModule.forRoot({
       type: 'better-sqlite3',
       database: process.env.DB_PATH || './zenith.sqlite',
-      entities: [SensorReading, PostureEvent, ModeChange],
+      entities: [SensorReading, PostureEvent, ModeChange, NfcChip, NfcScanLog],
       synchronize: true, // Geliştirme aşamasında – production'da migration kullanılacak
     }),
 
@@ -41,6 +44,7 @@ import { GatewayModule } from './gateway/gateway.module';
     ModeModule,
     WeatherModule,
     GatewayModule,
+    NfcModule,
   ],
 })
 export class AppModule {}

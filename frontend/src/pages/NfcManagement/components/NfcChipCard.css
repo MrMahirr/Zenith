@@ -1,0 +1,161 @@
+/* ═══════════════════════════════════════════
+   NFC CHIP CARD – Individual chip display
+   ═══════════════════════════════════════════ */
+
+.nfc-chip-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  animation: slide-up 0.4s ease backwards;
+  transition: all var(--transition-normal);
+}
+
+/* ─── Highlight animation (yeni çip okundu) ─── */
+.nfc-chip-card--highlighted {
+  --glow-color: var(--chip-accent);
+  animation: glow-ring 1.5s ease 2;
+  border-color: var(--chip-accent) !important;
+}
+
+/* ─── Kayıtsız çip vurgusu ─── */
+.nfc-chip-card--unregistered {
+  border-color: rgba(245, 158, 11, 0.25) !important;
+  background: rgba(245, 158, 11, 0.04) !important;
+}
+
+.nfc-chip-card--unregistered:hover {
+  border-color: rgba(245, 158, 11, 0.4) !important;
+  background: rgba(245, 158, 11, 0.08) !important;
+}
+
+/* ─── Status Indicator ─── */
+.nfc-chip-card__status {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.nfc-chip-card__status--registered {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.nfc-chip-card__status--unregistered {
+  background: rgba(245, 158, 11, 0.15);
+  color: #F59E0B;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  animation: pulse-dot 2s ease infinite;
+}
+
+/* ─── Mode Badge ─── */
+.nfc-chip-card__mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid;
+  width: fit-content;
+}
+
+.nfc-chip-card__mode-badge--unknown {
+  background: rgba(245, 158, 11, 0.12);
+  color: #F59E0B;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+/* ─── UID ─── */
+.nfc-chip-card__uid {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.05em;
+}
+
+/* ─── Label ─── */
+.nfc-chip-card__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Last Seen ─── */
+.nfc-chip-card__seen {
+  margin-top: 2px;
+}
+
+/* ─── Action Buttons ─── */
+.nfc-chip-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.nfc-chip-card__btn {
+  flex: 1;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+}
+
+.nfc-chip-card__btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.nfc-chip-card__btn--edit {
+  flex: 3;
+}
+
+.nfc-chip-card__btn--delete {
+  flex: 1;
+  color: var(--text-muted);
+}
+
+.nfc-chip-card__btn--delete:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #EF4444;
+}
+
+.nfc-chip-card__btn--register {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(249, 115, 22, 0.15));
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #F59E0B;
+}
+
+.nfc-chip-card__btn--register:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(249, 115, 22, 0.25));
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #FCD34D;
+}
+
+/* ─── Staggered animations ─── */
+.nfc-chip-card:nth-child(1) { animation-delay: 0.05s; }
+.nfc-chip-card:nth-child(2) { animation-delay: 0.1s; }
+.nfc-chip-card:nth-child(3) { animation-delay: 0.15s; }
+.nfc-chip-card:nth-child(4) { animation-delay: 0.2s; }
+.nfc-chip-card:nth-child(5) { animation-delay: 0.25s; }
+.nfc-chip-card:nth-child(6) { animation-delay: 0.3s; }

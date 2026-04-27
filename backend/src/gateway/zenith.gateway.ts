@@ -11,6 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { SensorService } from '../sensor/sensor.service';
 import { PostureService } from '../posture/posture.service';
 import { ModeService } from '../mode/mode.service';
+import { NfcService } from '../nfc/nfc.service';
 
 /**
  * Zenith WebSocket Gateway – Tek Hub
@@ -36,6 +37,7 @@ export class ZenithGateway
     private readonly sensorService: SensorService,
     private readonly postureService: PostureService,
     private readonly modeService: ModeService,
+    private readonly nfcService: NfcService,
   ) {}
 
   // ──────────── LIFECYCLE ────────────
@@ -99,7 +101,48 @@ export class ZenithGateway
     }
   }
 
-  // ──────────── NFC MODE (Python → Backend → React + LED) ────────────
+  // ──────────── NFC CHIP SCANNED (Python → Backend → React + LED) ────────────
+
+  /**
+   * Yeni NFC handler – Python'dan çip UID'si gelir.
+   * Mod eşleştirmesi artık DB'de yapılır (Python'da hardcoded değil).
+   */
+  @SubscribeMessage('nfc_chip_scanned')
+  async handleNfcChipScanned(
+    _client: Socket,
+    payload: { uid: string },
+  ) {
+    const { chip, isNew } = await this.nfcService.handleChipScan(payload.uid);
+
+    // Frontend'e çip listesi güncellemesi gönder
+    this.server.emit('nfc_chip_list_updated', { chip, isNew });
+
+    if (chip.isRegistered && chip.assignedMode) {
+      // Kayıtlı çip – mod değiştir
+      const result = await this.modeService.changeMode(chip.assignedMode);
+
+      if (result) {
+        // React'a mod değişimi yayınla
+        this.server.emit('mode_changed', result);
+
+        // LED'e mod renk animasyonu komutu gönder
+        this.server.emit('led_command', {
+          type: 'MODE_CHANGE',
+          color: result.config.color,
+          duration: 5000,
+        });
+      }
+    } else {
+      // Kayıtsız çip – frontend'e uyarı gönder
+      this.server.emit('nfc_unknown_chip', {
+        uid: chip.uid,
+        chipId: chip.id,
+        firstSeenAt: chip.firstSeenAt,
+      });
+    }
+  }
+
+  // ──────────── NFC MODE (Eski handler – geriye uyumluluk) ────────────
 
   @SubscribeMessage('nfc_mode_change')
   async handleModeChange(_client: Socket, newMode: string) {
@@ -118,3 +161,4 @@ export class ZenithGateway
     }
   }
 }
+
