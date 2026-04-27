@@ -26,7 +26,17 @@ class NFCManager:
             self.gpio = GPIO
             self.reader = SimpleMFRC522()
             self.has_hardware = True
-            print("[NFC] MFRC522 donanimi hazir.")
+            
+            # SPI baglantisini dogrulamak icin Versiyon Register'ini oku (0x37)
+            try:
+                version = self.reader.READER.Read_MFRC522(0x37)
+                print(f"[NFC] MFRC522 donanimi hazir. Cihaz Versiyonu: 0x{version:X}")
+                if version == 0x00 or version == 0xFF:
+                    print("[NFC] UYARI: SPI iletisimi basarisiz (Versiyon 0x00 veya 0xFF).")
+                    print("[NFC] -> Kablolari, lehimleri ve MISO/MOSI baglantilarini kontrol edin!")
+            except Exception as e:
+                print(f"[NFC] Versiyon okuma basarisiz: {e}")
+                
         except Exception as exc:
             self.hardware_error = exc
             self.has_hardware = False
