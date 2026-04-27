@@ -47,7 +47,7 @@ class NFCManager:
         while self.running:
             if self.has_hardware and self.reader is not None:
                 try:
-                    card_id, text = self.reader.read()
+                    card_id = self.reader.read_id()
                     # Convert card_id to hex format for consistency (optional but recommended)
                     # SimpleMFRC522 returns integer ID.
                     uid_hex = hex(card_id)[2:].upper()
