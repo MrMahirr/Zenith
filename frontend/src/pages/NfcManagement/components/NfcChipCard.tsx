@@ -1,4 +1,4 @@
-import type { NfcChip } from '../../hooks/useNfcChips';
+import type { NfcChip } from '../../../hooks/useNfcChips';
 import './NfcChipCard.css';
 
 const MODE_COLORS: Record<string, string> = {

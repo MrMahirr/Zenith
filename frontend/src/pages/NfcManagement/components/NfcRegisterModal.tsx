@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { NfcChip } from '../../hooks/useNfcChips';
+import type { NfcChip } from '../../../hooks/useNfcChips';
 import './NfcRegisterModal.css';
 
 const MODE_OPTIONS = [
