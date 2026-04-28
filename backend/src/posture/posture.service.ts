@@ -36,13 +36,21 @@ export class PostureService {
     return this.currentStatus;
   }
 
-  /** Geçmiş postür event'lerini getir */
+  /** Geçmiş postür event'lerini getir (Downsampling ile Max 100 veri) */
   async getHistory(hours: number = 24): Promise<PostureEvent[]> {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    return this.postureRepo.find({
+    const data = await this.postureRepo.find({
       where: { createdAt: MoreThanOrEqual(since) },
       order: { createdAt: 'ASC' },
     });
+
+    const MAX_POINTS = 100;
+    if (data.length <= MAX_POINTS) {
+      return data;
+    }
+
+    const step = Math.ceil(data.length / MAX_POINTS);
+    return data.filter((_, index) => index % step === 0);
   }
 
   /** İstatistik: Belirli sürede kambur kalma yüzdesi */

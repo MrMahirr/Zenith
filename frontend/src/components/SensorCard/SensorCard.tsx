@@ -1,7 +1,7 @@
 import './SensorCard.css';
 
 interface Props {
-  icon: string;
+  icon: React.ReactNode;
   label: string;
   value: string | number | null;
   unit: string;

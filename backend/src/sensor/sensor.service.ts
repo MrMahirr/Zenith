@@ -32,12 +32,20 @@ export class SensorService {
     return this.latestReading;
   }
 
-  /** Belirli zaman aralığındaki geçmiş verileri getir */
+  /** Belirli zaman aralığındaki geçmiş verileri getir (Downsampling ile Max 100 veri) */
   async getHistory(hours: number = 24): Promise<SensorReading[]> {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    return this.sensorRepo.find({
+    const data = await this.sensorRepo.find({
       where: { createdAt: MoreThanOrEqual(since) },
       order: { createdAt: 'ASC' },
     });
+
+    const MAX_POINTS = 100;
+    if (data.length <= MAX_POINTS) {
+      return data;
+    }
+
+    const step = Math.ceil(data.length / MAX_POINTS);
+    return data.filter((_, index) => index % step === 0);
   }
 }

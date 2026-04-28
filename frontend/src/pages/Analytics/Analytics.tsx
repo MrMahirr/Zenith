@@ -5,6 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import './Analytics.css';
+import temperatureIcon from '../../assets/icons/thermometer.png';
 
 const API_URL = 'http://localhost:3000/api';
 
@@ -31,9 +32,11 @@ export function Analytics() {
   const [postureStats, setPostureStats] = useState<any>(null);
   const [modeStats, setModeStats] = useState<any>(null);
   const [hours, setHours] = useState(24);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchAll = async () => {
+      setIsLoading(true);
       try {
         const [sRes, pRes, psRes, mRes] = await Promise.all([
           fetch(`${API_URL}/sensors/history?hours=${hours}`),
@@ -77,11 +80,30 @@ export function Analytics() {
         setModeStats(pieData.length > 0 ? pieData : null);
       } catch (err) {
         console.error('Analiz verileri alınamadı:', err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchAll();
   }, [hours]);
+
+  if (isLoading) {
+    return (
+      <div className="analytics analytics--loading">
+        <header className="analytics__header">
+          <button className="analytics__back" onClick={() => navigate('/')} id="back-btn">
+            ‹ Dashboard
+          </button>
+          <h1 className="analytics__title">📊 İstatistikler</h1>
+        </header>
+        <div className="analytics__loading-container">
+          <div className="analytics__spinner"></div>
+          <p>Veriler optimize ediliyor...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="analytics">
@@ -108,7 +130,8 @@ export function Analytics() {
       <div className="analytics__grid">
         {/* Sıcaklık & Nem Grafiği */}
         <div className="analytics__card glass-card">
-          <h2 className="analytics__card-title">🌡️ Sıcaklık & Nem</h2>
+          <h2 className="analytics__card-title"><img src={temperatureIcon} alt="Nem" className="dashboard__sensor-icon" />
+ Sıcaklık & Nem</h2>
           {sensorHistory.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={sensorHistory}>

@@ -9,6 +9,11 @@ import { usePosture } from '../../hooks/usePosture';
 import { useMode } from '../../hooks/useMode';
 import { useWeather } from '../../hooks/useWeather';
 import './Dashboard.css';
+import temperatureIcon from '../../assets/icons/thermometer.png';
+import humidityIcon from '../../assets/icons/humidity.png';
+import windIcon from '../../assets/icons/wind.png';
+import chartIcon from '../../assets/icons/chart.png';
+import nfcIcon from '../../assets/icons/nfc.png';
 
 export function Dashboard() {
   const sensor = useSensorData();
@@ -46,21 +51,21 @@ export function Dashboard() {
       {/* ─── ALT BAR: SENSÖR VERİLERİ ─── */}
       <footer className="dashboard__footer">
         <SensorCard
-          icon="🌡️"
+          icon={<img src={temperatureIcon} alt="Sıcaklık" className="dashboard__sensor-icon" />}
           label="Sıcaklık"
           value={sensor.temp}
           unit="°C"
           accentColor="#F97316"
         />
         <SensorCard
-          icon="💧"
+          icon={<img src={humidityIcon} alt="Nem" className="dashboard__sensor-icon" />}
           label="Nem"
           value={sensor.humidity}
           unit="%"
           accentColor="#06B6D4"
         />
         <SensorCard
-          icon="💨"
+          icon={<img src={windIcon} alt="Nem" className="dashboard__sensor-icon" />}
           label="Hava Kalitesi"
           value="İyi"
           unit=""
@@ -71,7 +76,9 @@ export function Dashboard() {
           onClick={() => navigate('/analytics')}
           id="analytics-btn"
         >
-          <span className="dashboard__chart-btn-icon">📊</span>
+          <span className="dashboard__chart-btn-icon">
+            <img src={chartIcon} alt="İstatistik" className="dashboard__sensor-icon" />
+          </span>
           <span className="dashboard__chart-btn-text">İstatistik</span>
           <span className="dashboard__chart-btn-chevron">›</span>
         </button>
@@ -80,7 +87,9 @@ export function Dashboard() {
           onClick={() => navigate('/nfc')}
           id="nfc-btn"
         >
-          <span className="dashboard__chart-btn-icon">📱</span>
+          <span className="dashboard__chart-btn-icon">
+            <img src={nfcIcon} alt="NFC" className="dashboard__sensor-icon" />
+          </span>
           <span className="dashboard__chart-btn-text">NFC</span>
           <span className="dashboard__chart-btn-chevron">›</span>
         </button>

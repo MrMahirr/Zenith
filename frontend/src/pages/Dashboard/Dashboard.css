@@ -144,6 +144,14 @@
   transform: translateY(-50%) translateX(3px);
 }
 
+/* ─── Custom Sensor Icons ─── */
+.dashboard__sensor-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  filter: brightness(0) invert(1) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
+
 /* ─── Responsive: Masaüstü ─── */
 @media (min-width: 1200px) {
   .dashboard {
