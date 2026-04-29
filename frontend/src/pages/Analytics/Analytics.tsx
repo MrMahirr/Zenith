@@ -1,8 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AreaChart, Area, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
 } from 'recharts';
 import './Analytics.css';
 import temperatureIcon from '../../assets/icons/thermometer.png';
@@ -22,8 +31,76 @@ const MODE_LABELS: Record<string, string> = {
   CODING: 'Kodlama',
   FOCUS: 'Odak',
   RELAX: 'Relax',
-  MEETING: 'Toplantı',
+  MEETING: 'Toplanti',
 };
+
+function AnalyticsSkeleton() {
+  return (
+    <div className="analytics__grid analytics__grid--skeleton" aria-hidden="true">
+      <div className="analytics__card glass-card">
+        <div className="analytics__skeleton-title analytics__skeleton-shimmer" />
+        <div className="analytics__skeleton-chart">
+          <div className="analytics__skeleton-bars">
+            {[42, 68, 54, 82, 58, 74, 46].map((height, index) => (
+              <span
+                key={index}
+                className="analytics__skeleton-bar analytics__skeleton-shimmer"
+                style={{ height: `${height}%` }}
+              />
+            ))}
+          </div>
+          <div className="analytics__skeleton-axis">
+            {[0, 1, 2, 3, 4].map((tick) => (
+              <span key={tick} className="analytics__skeleton-tick analytics__skeleton-shimmer" />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="analytics__card glass-card">
+        <div className="analytics__skeleton-title analytics__skeleton-shimmer" />
+        <div className="analytics__skeleton-line-chart">
+          {[28, 62, 35, 70, 40, 76, 52].map((top, index) => (
+            <span
+              key={index}
+              className="analytics__skeleton-node analytics__skeleton-shimmer"
+              style={{ top: `${top}%`, left: `${8 + index * 13}%` }}
+            />
+          ))}
+          <div className="analytics__skeleton-axis analytics__skeleton-axis--bottom">
+            {[0, 1, 2, 3, 4].map((tick) => (
+              <span key={tick} className="analytics__skeleton-tick analytics__skeleton-shimmer" />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="analytics__card analytics__card--small glass-card">
+        <div className="analytics__skeleton-title analytics__skeleton-shimmer" />
+        <div className="analytics__skeleton-stats">
+          <div className="analytics__skeleton-circle analytics__skeleton-shimmer" />
+          <div className="analytics__skeleton-label analytics__skeleton-shimmer" />
+          <div className="analytics__skeleton-sub analytics__skeleton-shimmer" />
+        </div>
+      </div>
+
+      <div className="analytics__card analytics__card--small glass-card">
+        <div className="analytics__skeleton-title analytics__skeleton-shimmer" />
+        <div className="analytics__skeleton-pie-wrap">
+          <div className="analytics__skeleton-pie analytics__skeleton-shimmer" />
+          <div className="analytics__skeleton-legend">
+            {[0, 1, 2].map((item) => (
+              <div key={item} className="analytics__skeleton-legend-row">
+                <span className="analytics__skeleton-legend-dot analytics__skeleton-shimmer" />
+                <span className="analytics__skeleton-legend-text analytics__skeleton-shimmer" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function Analytics() {
   const navigate = useNavigate();
@@ -50,36 +127,40 @@ export function Analytics() {
         const postureStatsData = await psRes.json();
         const modeStatsData = await mRes.json();
 
-        // Sensör verilerini formatla
         setSensorHistory(
           sensorData.map((d: any) => ({
-            time: new Date(d.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-            sıcaklık: d.temperature,
+            time: new Date(d.createdAt).toLocaleTimeString('tr-TR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            sicaklik: d.temperature,
             nem: d.humidity,
-          }))
+          })),
         );
 
-        // Postür verilerini formatla
         setPostureHistory(
           postureData.map((d: any) => ({
-            time: new Date(d.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+            time: new Date(d.createdAt).toLocaleTimeString('tr-TR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
             durum: d.isSlouching ? 1 : 0,
-          }))
+          })),
         );
 
         setPostureStats(postureStatsData);
 
-        // Mod verilerini pie chart formatına çevir
         const pieData = Object.entries(modeStatsData)
-          .filter(([_, v]) => (v as number) > 0)
+          .filter(([_, value]) => (value as number) > 0)
           .map(([key, value]) => ({
             name: MODE_LABELS[key] || key,
             value: value as number,
             color: PIE_COLORS[key] || '#666',
           }));
+
         setModeStats(pieData.length > 0 ? pieData : null);
       } catch (err) {
-        console.error('Analiz verileri alınamadı:', err);
+        console.error('Analiz verileri alinamadi:', err);
       } finally {
         setIsLoading(false);
       }
@@ -93,32 +174,41 @@ export function Analytics() {
       <div className="analytics analytics--loading">
         <header className="analytics__header">
           <button className="analytics__back" onClick={() => navigate('/')} id="back-btn">
-            ‹ Dashboard
+            {'<'} Dashboard
           </button>
-          <h1 className="analytics__title">📊 İstatistikler</h1>
+          <h1 className="analytics__title">Istatistikler</h1>
+          <div className="analytics__filter">
+            {[6, 12, 24, 48].map((h) => (
+              <button
+                key={h}
+                className={`analytics__filter-btn ${hours === h ? 'analytics__filter-btn--active' : ''}`}
+                disabled
+                type="button"
+              >
+                {h}s
+              </button>
+            ))}
+          </div>
         </header>
-        <div className="analytics__loading-container">
-          <div className="analytics__spinner"></div>
-          <p>Veriler optimize ediliyor...</p>
-        </div>
+        <AnalyticsSkeleton />
       </div>
     );
   }
 
   return (
     <div className="analytics">
-      {/* Header */}
       <header className="analytics__header">
         <button className="analytics__back" onClick={() => navigate('/')} id="back-btn">
-          ‹ Dashboard
+          {'<'} Dashboard
         </button>
-        <h1 className="analytics__title">📊 İstatistikler</h1>
+        <h1 className="analytics__title">Istatistikler</h1>
         <div className="analytics__filter">
           {[6, 12, 24, 48].map((h) => (
             <button
               key={h}
               className={`analytics__filter-btn ${hours === h ? 'analytics__filter-btn--active' : ''}`}
               onClick={() => setHours(h)}
+              type="button"
             >
               {h}s
             </button>
@@ -126,12 +216,13 @@ export function Analytics() {
         </div>
       </header>
 
-      {/* Charts Grid */}
       <div className="analytics__grid">
-        {/* Sıcaklık & Nem Grafiği */}
         <div className="analytics__card glass-card">
-          <h2 className="analytics__card-title"><img src={temperatureIcon} alt="Nem" className="dashboard__sensor-icon" />
- Sıcaklık & Nem</h2>
+          <h2 className="analytics__card-title">
+            <img src={temperatureIcon} alt="Sicaklik" className="dashboard__sensor-icon" />
+            {' '}
+            Sicaklik & Nem
+          </h2>
           {sensorHistory.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={sensorHistory}>
@@ -149,22 +240,26 @@ export function Analytics() {
                 <XAxis dataKey="time" stroke="rgba(255,255,255,0.2)" fontSize={10} />
                 <YAxis stroke="rgba(255,255,255,0.2)" fontSize={10} />
                 <Tooltip
-                  contentStyle={{ background: '#1a1f36', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }}
+                  contentStyle={{
+                    background: '#1a1f36',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                  }}
                   labelStyle={{ color: '#94A3B8' }}
                 />
-                <Area type="monotone" dataKey="sıcaklık" stroke="#F97316" fill="url(#tempGrad)" strokeWidth={2} />
+                <Area type="monotone" dataKey="sicaklik" stroke="#F97316" fill="url(#tempGrad)" strokeWidth={2} />
                 <Area type="monotone" dataKey="nem" stroke="#06B6D4" fill="url(#humGrad)" strokeWidth={2} />
                 <Legend wrapperStyle={{ fontSize: '11px', color: '#94A3B8' }} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="analytics__empty">Henüz veri yok</div>
+            <div className="analytics__empty">Henuz veri yok</div>
           )}
         </div>
 
-        {/* Duruş Analizi Zaman Çizelgesi */}
         <div className="analytics__card glass-card">
-          <h2 className="analytics__card-title">🧍 Duruş Zaman Çizelgesi</h2>
+          <h2 className="analytics__card-title">Durus Zaman Cizelgesi</h2>
           {postureHistory.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={postureHistory}>
@@ -180,31 +275,38 @@ export function Analytics() {
                   stroke="rgba(255,255,255,0.2)"
                   fontSize={10}
                   ticks={[0, 1]}
-                  tickFormatter={(v) => (v === 1 ? 'Kambur' : 'Düzgün')}
+                  tickFormatter={(value) => (value === 1 ? 'Kambur' : 'Duzgun')}
                 />
                 <Tooltip
-                  contentStyle={{ background: '#1a1f36', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }}
-                  formatter={(v: any) => [v === 1 ? 'Kambur' : 'Düzgün', 'Duruş']}
+                  contentStyle={{
+                    background: '#1a1f36',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                  }}
+                  formatter={(value: any) => [value === 1 ? 'Kambur' : 'Duzgun', 'Durus']}
                 />
                 <Area type="stepAfter" dataKey="durum" stroke="#EF4444" fill="url(#postureGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="analytics__empty">Henüz veri yok</div>
+            <div className="analytics__empty">Henuz veri yok</div>
           )}
         </div>
 
-        {/* Duruş İstatistikleri */}
         <div className="analytics__card analytics__card--small glass-card">
-          <h2 className="analytics__card-title">✅ Duruş Skoru</h2>
+          <h2 className="analytics__card-title">Durus Skoru</h2>
           {postureStats ? (
             <div className="analytics__stats">
-              <div className="analytics__stat-circle" style={{
-                background: `conic-gradient(#10B981 ${postureStats.goodPercentage * 3.6}deg, rgba(255,255,255,0.05) 0deg)`
-              }}>
+              <div
+                className="analytics__stat-circle"
+                style={{
+                  background: `conic-gradient(#10B981 ${postureStats.goodPercentage * 3.6}deg, rgba(255,255,255,0.05) 0deg)`,
+                }}
+              >
                 <span className="analytics__stat-value">{postureStats.goodPercentage}%</span>
               </div>
-              <p className="analytics__stat-label">Düzgün Duruş</p>
+              <p className="analytics__stat-label">Duzgun Durus</p>
               <p className="analytics__stat-sub">{postureStats.totalEvents} olay</p>
             </div>
           ) : (
@@ -212,9 +314,8 @@ export function Analytics() {
           )}
         </div>
 
-        {/* Mod Kullanımı Pie Chart */}
         <div className="analytics__card analytics__card--small glass-card">
-          <h2 className="analytics__card-title">🎯 Mod Kullanımı</h2>
+          <h2 className="analytics__card-title">Mod Kullanimi</h2>
           {modeStats ? (
             <ResponsiveContainer width="100%" height={160}>
               <PieChart>
@@ -232,7 +333,12 @@ export function Analytics() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ background: '#1a1f36', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }}
+                  contentStyle={{
+                    background: '#1a1f36',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                  }}
                 />
                 <Legend wrapperStyle={{ fontSize: '10px', color: '#94A3B8' }} />
               </PieChart>
