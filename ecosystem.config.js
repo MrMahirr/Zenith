@@ -15,7 +15,10 @@ module.exports = {
       name: 'zenith-frontend',
       cwd: '/home/mahir/Zenith/frontend',
       script: 'npm',
-      args: 'run dev -- --host',
+      args: 'run serve:prod',
+      env: {
+        NODE_ENV: 'production',
+      },
     },
     {
       name: 'zenith-camera',
