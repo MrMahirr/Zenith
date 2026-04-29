@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 /**
@@ -14,6 +15,7 @@ import {
  * kullanıcının sisteme eklemesini bekler.
  */
 @Entity('nfc_chips')
+@Index('idx_nfc_chips_registered_last_seen', ['isRegistered', 'lastSeenAt'])
 export class NfcChip {
   @PrimaryGeneratedColumn()
   id: number;
@@ -31,6 +33,7 @@ export class NfcChip {
   assignedMode: string | null;
 
   /** Çip sisteme kayıtlı mı? */
+  @Index('idx_nfc_chips_is_registered')
   @Column({ type: 'boolean', default: false })
   isRegistered: boolean;
 
@@ -43,6 +46,7 @@ export class NfcChip {
   updatedAt: Date;
 
   /** Son okunma zamanı */
+  @Index('idx_nfc_chips_last_seen_at')
   @Column({ type: 'datetime', nullable: true })
   lastSeenAt: Date | null;
 }

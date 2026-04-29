@@ -30,6 +30,14 @@ interface SensorSummaryRow {
   sourceMaxCreatedAt: string;
 }
 
+interface SensorHistoryRow {
+  createdAt: string;
+  temperature: number;
+  humidity: number;
+  pressure: number;
+  sampleCount: number;
+}
+
 @Injectable()
 export class SensorService implements OnModuleInit {
   private readonly logger = new Logger(SensorService.name);
@@ -72,28 +80,14 @@ export class SensorService implements OnModuleInit {
 
   async getHistory(hours = 24): Promise<SensorHistoryPoint[]> {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    const rawCutoff = this.getRawCutoffDate();
-
-    if (since >= rawCutoff) {
-      const raw = await this.sensorRepo.find({
-        where: { createdAt: MoreThanOrEqual(since) },
-        order: { createdAt: 'ASC' },
-      });
-      return this.downsample(this.mapRawHistory(raw));
-    }
-
-    const [summaryRows, rawRows] = await Promise.all([
-      this.getSummaryRows(since, rawCutoff),
-      this.sensorRepo.find({
-        where: { createdAt: MoreThanOrEqual(rawCutoff) },
-        order: { createdAt: 'ASC' },
-      }),
-    ]);
-
-    return this.downsample([
-      ...this.mapSummaryHistory(summaryRows),
-      ...this.mapRawHistory(rawRows),
-    ]);
+    const rows = await this.queryBucketedHistory(since, hours);
+    return rows.map((row) => ({
+      createdAt: row.createdAt,
+      temperature: Number(row.temperature),
+      humidity: Number(row.humidity),
+      pressure: Number(row.pressure),
+      sampleCount: Number(row.sampleCount),
+    }));
   }
 
   @Cron('0 */15 * * * *')
@@ -168,46 +162,94 @@ export class SensorService implements OnModuleInit {
     return new Date(Date.now() - RAW_RETENTION_HOURS * 60 * 60 * 1000);
   }
 
-  private async getSummaryRows(start: Date, end: Date) {
-    return this.sensorSummaryRepo
-      .createQueryBuilder('summary')
-      .where('summary.minuteBucket >= :start', {
-        start: this.toSqliteDateTime(start),
-      })
-      .andWhere('summary.minuteBucket < :end', {
-        end: this.toSqliteDateTime(end),
-      })
-      .orderBy('summary.minuteBucket', 'ASC')
-      .getMany();
-  }
+  private async queryBucketedHistory(since: Date, hours: number) {
+    const rawCutoff = this.getRawCutoffDate();
+    const bucketSizeSeconds = this.getBucketSizeSeconds(hours);
 
-  private mapRawHistory(rows: SensorReading[]): SensorHistoryPoint[] {
-    return rows.map((row) => ({
-      createdAt: row.createdAt,
-      temperature: row.temperature,
-      humidity: row.humidity,
-      pressure: row.pressure,
-      sampleCount: 1,
-    }));
-  }
-
-  private mapSummaryHistory(rows: SensorMinuteSummary[]): SensorHistoryPoint[] {
-    return rows.map((row) => ({
-      createdAt: row.minuteBucket,
-      temperature: Number(row.avgTemperature),
-      humidity: Number(row.avgHumidity),
-      pressure: Number(row.avgPressure),
-      sampleCount: row.sampleCount,
-    }));
-  }
-
-  private downsample(data: SensorHistoryPoint[]) {
-    if (data.length <= MAX_HISTORY_POINTS) {
-      return data;
+    if (since >= rawCutoff) {
+      return this.dataSource.query(
+        `
+          SELECT *
+          FROM (
+            SELECT
+              datetime(
+                CAST(CAST(strftime('%s', createdAt) AS INTEGER) / ? AS INTEGER) * ?,
+                'unixepoch'
+              ) AS createdAt,
+              ROUND(AVG(temperature), 3) AS temperature,
+              ROUND(AVG(humidity), 3) AS humidity,
+              ROUND(AVG(pressure), 3) AS pressure,
+              COUNT(*) AS sampleCount
+            FROM sensor_readings
+            WHERE createdAt >= ?
+            GROUP BY CAST(CAST(strftime('%s', createdAt) AS INTEGER) / ? AS INTEGER)
+            ORDER BY createdAt DESC
+            LIMIT ?
+          ) AS bucketed
+          ORDER BY createdAt ASC
+        `,
+        [
+          bucketSizeSeconds,
+          bucketSizeSeconds,
+          this.toSqliteDateTime(since),
+          bucketSizeSeconds,
+          MAX_HISTORY_POINTS,
+        ],
+      ) as Promise<SensorHistoryRow[]>;
     }
 
-    const step = Math.ceil(data.length / MAX_HISTORY_POINTS);
-    return data.filter((_, index) => index % step === 0);
+    return this.dataSource.query(
+      `
+        SELECT *
+        FROM (
+          SELECT
+            datetime(CAST(source.pointTs / ? AS INTEGER) * ?, 'unixepoch') AS createdAt,
+            ROUND(SUM(source.temperatureWeighted) / SUM(source.sampleCount), 3) AS temperature,
+            ROUND(SUM(source.humidityWeighted) / SUM(source.sampleCount), 3) AS humidity,
+            ROUND(SUM(source.pressureWeighted) / SUM(source.sampleCount), 3) AS pressure,
+            SUM(source.sampleCount) AS sampleCount
+          FROM (
+            SELECT
+              CAST(strftime('%s', minuteBucket) AS INTEGER) AS pointTs,
+              avgTemperature * sampleCount AS temperatureWeighted,
+              avgHumidity * sampleCount AS humidityWeighted,
+              avgPressure * sampleCount AS pressureWeighted,
+              sampleCount
+            FROM sensor_minute_summaries
+            WHERE minuteBucket >= ?
+              AND minuteBucket < ?
+
+            UNION ALL
+
+            SELECT
+              CAST(strftime('%s', createdAt) AS INTEGER) AS pointTs,
+              temperature AS temperatureWeighted,
+              humidity AS humidityWeighted,
+              pressure AS pressureWeighted,
+              1 AS sampleCount
+            FROM sensor_readings
+            WHERE createdAt >= ?
+          ) AS source
+          GROUP BY CAST(source.pointTs / ? AS INTEGER)
+          ORDER BY createdAt DESC
+          LIMIT ?
+        ) AS bucketed
+        ORDER BY createdAt ASC
+      `,
+      [
+        bucketSizeSeconds,
+        bucketSizeSeconds,
+        this.toSqliteDateTime(since),
+        this.toSqliteDateTime(rawCutoff),
+        this.toSqliteDateTime(rawCutoff),
+        bucketSizeSeconds,
+        MAX_HISTORY_POINTS,
+      ],
+    ) as Promise<SensorHistoryRow[]>;
+  }
+
+  private getBucketSizeSeconds(hours: number) {
+    return Math.max(60, Math.ceil((hours * 60 * 60) / MAX_HISTORY_POINTS));
   }
 
   private toSqliteDateTime(value: Date) {

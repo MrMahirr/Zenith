@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
 @Entity('mode_changes')
 export class ModeChange {
@@ -8,6 +8,7 @@ export class ModeChange {
   @Column({ type: 'varchar', length: 20 })
   mode: string;
 
+  @Index('idx_mode_changes_created_at')
   @CreateDateColumn()
   createdAt: Date;
 }

@@ -28,6 +28,18 @@ interface PostureSummaryRow {
   sourceMaxCreatedAt: string;
 }
 
+interface PostureHistoryRow {
+  createdAt: string;
+  isSlouching: number;
+  distance: number;
+  sampleCount: number;
+}
+
+interface PostureStatsRow {
+  totalEvents: number;
+  slouchCount: number;
+}
+
 @Injectable()
 export class PostureService implements OnModuleInit {
   private readonly logger = new Logger(PostureService.name);
@@ -74,62 +86,21 @@ export class PostureService implements OnModuleInit {
 
   async getHistory(hours = 24): Promise<PostureHistoryPoint[]> {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    const rawCutoff = this.getRawCutoffDate();
-
-    if (since >= rawCutoff) {
-      const raw = await this.postureRepo.find({
-        where: { createdAt: MoreThanOrEqual(since) },
-        order: { createdAt: 'ASC' },
-      });
-      return this.downsample(this.mapRawHistory(raw));
-    }
-
-    const [summaryRows, rawRows] = await Promise.all([
-      this.getSummaryRows(since, rawCutoff),
-      this.postureRepo.find({
-        where: { createdAt: MoreThanOrEqual(rawCutoff) },
-        order: { createdAt: 'ASC' },
-      }),
-    ]);
-
-    return this.downsample([
-      ...this.mapSummaryHistory(summaryRows),
-      ...this.mapRawHistory(rawRows),
-    ]);
+    const rows = await this.queryBucketedHistory(since, hours);
+    return rows.map((row) => ({
+      createdAt: row.createdAt,
+      isSlouching: Boolean(Number(row.isSlouching)),
+      distance: Number(row.distance),
+      sampleCount: Number(row.sampleCount),
+    }));
   }
 
   async getStats(hours = 24) {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    const rawCutoff = this.getRawCutoffDate();
-
-    if (since >= rawCutoff) {
-      const raw = await this.postureRepo.find({
-        where: { createdAt: MoreThanOrEqual(since) },
-      });
-      return this.buildStats(raw.length, raw.filter((row) => row.isSlouching).length);
-    }
-
-    const [summaryRows, rawRows] = await Promise.all([
-      this.getSummaryRows(since, rawCutoff),
-      this.postureRepo.find({
-        where: { createdAt: MoreThanOrEqual(rawCutoff) },
-      }),
-    ]);
-
-    const summaryEventCount = summaryRows.reduce(
-      (total, row) => total + row.eventCount,
-      0,
-    );
-    const summarySlouchCount = summaryRows.reduce(
-      (total, row) => total + row.slouchCount,
-      0,
-    );
-    const rawEventCount = rawRows.length;
-    const rawSlouchCount = rawRows.filter((row) => row.isSlouching).length;
-
+    const stats = await this.queryStats(since);
     return this.buildStats(
-      summaryEventCount + rawEventCount,
-      summarySlouchCount + rawSlouchCount,
+      Number(stats.totalEvents ?? 0),
+      Number(stats.slouchCount ?? 0),
     );
   }
 
@@ -203,39 +174,6 @@ export class PostureService implements OnModuleInit {
     return new Date(Date.now() - RAW_RETENTION_HOURS * 60 * 60 * 1000);
   }
 
-  private async getSummaryRows(start: Date, end: Date) {
-    return this.postureSummaryRepo
-      .createQueryBuilder('summary')
-      .where('summary.minuteBucket >= :start', {
-        start: this.toSqliteDateTime(start),
-      })
-      .andWhere('summary.minuteBucket < :end', {
-        end: this.toSqliteDateTime(end),
-      })
-      .orderBy('summary.minuteBucket', 'ASC')
-      .getMany();
-  }
-
-  private mapRawHistory(rows: PostureEvent[]): PostureHistoryPoint[] {
-    return rows.map((row) => ({
-      createdAt: row.createdAt,
-      isSlouching: row.isSlouching,
-      distance: row.distance,
-      sampleCount: 1,
-    }));
-  }
-
-  private mapSummaryHistory(
-    rows: PostureMinuteSummary[],
-  ): PostureHistoryPoint[] {
-    return rows.map((row) => ({
-      createdAt: row.minuteBucket,
-      isSlouching: row.slouchCount * 2 >= row.eventCount,
-      distance: Number(row.avgDistance),
-      sampleCount: row.eventCount,
-    }));
-  }
-
   private buildStats(totalEvents: number, slouchCount: number) {
     if (totalEvents === 0) {
       return { totalEvents: 0, slouchPercentage: 0, goodPercentage: 100 };
@@ -249,13 +187,148 @@ export class PostureService implements OnModuleInit {
     };
   }
 
-  private downsample(data: PostureHistoryPoint[]) {
-    if (data.length <= MAX_HISTORY_POINTS) {
-      return data;
+  private async queryBucketedHistory(since: Date, hours: number) {
+    const rawCutoff = this.getRawCutoffDate();
+    const bucketSizeSeconds = this.getBucketSizeSeconds(hours);
+
+    if (since >= rawCutoff) {
+      return this.dataSource.query(
+        `
+          SELECT *
+          FROM (
+            SELECT
+              datetime(
+                CAST(CAST(strftime('%s', createdAt) AS INTEGER) / ? AS INTEGER) * ?,
+                'unixepoch'
+              ) AS createdAt,
+              CASE
+                WHEN SUM(CASE WHEN isSlouching = 1 THEN 1 ELSE 0 END) * 2 >= COUNT(*)
+                THEN 1
+                ELSE 0
+              END AS isSlouching,
+              ROUND(AVG(distance), 4) AS distance,
+              COUNT(*) AS sampleCount
+            FROM posture_events
+            WHERE createdAt >= ?
+            GROUP BY CAST(CAST(strftime('%s', createdAt) AS INTEGER) / ? AS INTEGER)
+            ORDER BY createdAt DESC
+            LIMIT ?
+          ) AS bucketed
+          ORDER BY createdAt ASC
+        `,
+        [
+          bucketSizeSeconds,
+          bucketSizeSeconds,
+          this.toSqliteDateTime(since),
+          bucketSizeSeconds,
+          MAX_HISTORY_POINTS,
+        ],
+      ) as Promise<PostureHistoryRow[]>;
     }
 
-    const step = Math.ceil(data.length / MAX_HISTORY_POINTS);
-    return data.filter((_, index) => index % step === 0);
+    return this.dataSource.query(
+      `
+        SELECT *
+        FROM (
+          SELECT
+            datetime(CAST(source.pointTs / ? AS INTEGER) * ?, 'unixepoch') AS createdAt,
+            CASE
+              WHEN SUM(source.slouchWeighted) * 2 >= SUM(source.sampleCount)
+              THEN 1
+              ELSE 0
+            END AS isSlouching,
+            ROUND(SUM(source.distanceWeighted) / SUM(source.sampleCount), 4) AS distance,
+            SUM(source.sampleCount) AS sampleCount
+          FROM (
+            SELECT
+              CAST(strftime('%s', minuteBucket) AS INTEGER) AS pointTs,
+              slouchCount AS slouchWeighted,
+              avgDistance * eventCount AS distanceWeighted,
+              eventCount AS sampleCount
+            FROM posture_minute_summaries
+            WHERE minuteBucket >= ?
+              AND minuteBucket < ?
+
+            UNION ALL
+
+            SELECT
+              CAST(strftime('%s', createdAt) AS INTEGER) AS pointTs,
+              CASE WHEN isSlouching = 1 THEN 1 ELSE 0 END AS slouchWeighted,
+              distance AS distanceWeighted,
+              1 AS sampleCount
+            FROM posture_events
+            WHERE createdAt >= ?
+          ) AS source
+          GROUP BY CAST(source.pointTs / ? AS INTEGER)
+          ORDER BY createdAt DESC
+          LIMIT ?
+        ) AS bucketed
+        ORDER BY createdAt ASC
+      `,
+      [
+        bucketSizeSeconds,
+        bucketSizeSeconds,
+        this.toSqliteDateTime(since),
+        this.toSqliteDateTime(rawCutoff),
+        this.toSqliteDateTime(rawCutoff),
+        bucketSizeSeconds,
+        MAX_HISTORY_POINTS,
+      ],
+    ) as Promise<PostureHistoryRow[]>;
+  }
+
+  private async queryStats(since: Date) {
+    const rawCutoff = this.getRawCutoffDate();
+
+    if (since >= rawCutoff) {
+      const [row] = (await this.dataSource.query(
+        `
+          SELECT
+            COUNT(*) AS totalEvents,
+            SUM(CASE WHEN isSlouching = 1 THEN 1 ELSE 0 END) AS slouchCount
+          FROM posture_events
+          WHERE createdAt >= ?
+        `,
+        [this.toSqliteDateTime(since)],
+      )) as PostureStatsRow[];
+
+      return row ?? { totalEvents: 0, slouchCount: 0 };
+    }
+
+    const [row] = (await this.dataSource.query(
+      `
+        SELECT
+          SUM(source.totalEvents) AS totalEvents,
+          SUM(source.slouchCount) AS slouchCount
+        FROM (
+          SELECT
+            eventCount AS totalEvents,
+            slouchCount
+          FROM posture_minute_summaries
+          WHERE minuteBucket >= ?
+            AND minuteBucket < ?
+
+          UNION ALL
+
+          SELECT
+            1 AS totalEvents,
+            CASE WHEN isSlouching = 1 THEN 1 ELSE 0 END AS slouchCount
+          FROM posture_events
+          WHERE createdAt >= ?
+        ) AS source
+      `,
+      [
+        this.toSqliteDateTime(since),
+        this.toSqliteDateTime(rawCutoff),
+        this.toSqliteDateTime(rawCutoff),
+      ],
+    )) as PostureStatsRow[];
+
+    return row ?? { totalEvents: 0, slouchCount: 0 };
+  }
+
+  private getBucketSizeSeconds(hours: number) {
+    return Math.max(60, Math.ceil((hours * 60 * 60) / MAX_HISTORY_POINTS));
   }
 
   private toSqliteDateTime(value: Date) {

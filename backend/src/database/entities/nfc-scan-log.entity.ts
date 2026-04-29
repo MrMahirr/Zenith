@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 
 /**
@@ -30,6 +31,7 @@ export class NfcScanLog {
   wasRegistered: boolean;
 
   /** Okuma zamanı */
+  @Index('idx_nfc_scan_logs_scanned_at')
   @CreateDateColumn()
   scannedAt: Date;
 }

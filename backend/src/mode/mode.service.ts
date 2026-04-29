@@ -62,11 +62,20 @@ export class ModeService {
 
   /** Mod kullanım istatistikleri (pie chart için) */
   async getUsageStats(hours: number = 24) {
-    const history = await this.getHistory(hours);
     const stats: Record<string, number> = {};
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const rows = await this.modeRepo
+      .createQueryBuilder('mode_change')
+      .select('mode_change.mode', 'mode')
+      .addSelect('COUNT(*)', 'count')
+      .where('mode_change.createdAt >= :since', { since })
+      .groupBy('mode_change.mode')
+      .getRawMany<{ mode: string; count: string }>();
+
+    const rowMap = new Map(rows.map((row) => [row.mode, Number(row.count)]));
 
     for (const key of Object.keys(MODE_CONFIG)) {
-      stats[key] = history.filter((h) => h.mode === key).length;
+      stats[key] = rowMap.get(key) ?? 0;
     }
 
     return stats;
