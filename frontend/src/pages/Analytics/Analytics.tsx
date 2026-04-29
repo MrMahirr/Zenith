@@ -16,7 +16,7 @@ import {
 import './Analytics.css';
 import temperatureIcon from '../../assets/icons/thermometer.png';
 
-const API_URL = 'http://localhost:3000/api';
+const API_URL = `${window.location.protocol}//${window.location.hostname}:3000/api`;
 
 const PIE_COLORS: Record<string, string> = {
   PASSIVE: '#94A3B8',
