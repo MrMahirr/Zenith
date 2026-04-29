@@ -106,6 +106,7 @@ class PostureAnalyzer:
     def __init__(self):
         self.conn = ConnectionManager()
         self.is_currently_slouching = None
+        self.analysis_enabled = False
         self.running = False
         self.kamera_motoru = None
         self.last_frame_emit_at = 0.0
@@ -120,6 +121,7 @@ class PostureAnalyzer:
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
         )
+        self.conn.on("mode_changed", self._handle_mode_change)
 
     def start(self):
         if self.running:
@@ -152,6 +154,19 @@ class PostureAnalyzer:
             },
         )
 
+    def _handle_mode_change(self, payload):
+        mode = (payload or {}).get("mode", "PASSIVE")
+        self.analysis_enabled = mode != "PASSIVE"
+
+        if self.analysis_enabled:
+            print(f"[Kamera] Postur analizi aktif: {mode}")
+            return
+
+        self.is_currently_slouching = None
+        self.last_distance = 0.0
+        self.last_posture_emit_at = 0.0
+        print("[Kamera] Serbest mod aktif. Postur analizi devre disi.")
+
     def _process_frames(self):
         while self.running:
             try:
@@ -160,33 +175,43 @@ class PostureAnalyzer:
                     time.sleep(0.1)
                     continue
 
-                kare_rgb = cv2.cvtColor(kare, cv2.COLOR_BGR2RGB)
-                sonuclar = self.postur.process(kare_rgb)
+                if self.analysis_enabled:
+                    kare_rgb = cv2.cvtColor(kare, cv2.COLOR_BGR2RGB)
+                    sonuclar = self.postur.process(kare_rgb)
 
-                if sonuclar.pose_landmarks:
-                    noktalar = sonuclar.pose_landmarks.landmark
+                    if sonuclar.pose_landmarks:
+                        noktalar = sonuclar.pose_landmarks.landmark
 
-                    if len(noktalar) > self.mp_postur.PoseLandmark.RIGHT_SHOULDER.value:
-                        burun_y = noktalar[self.mp_postur.PoseLandmark.NOSE.value].y
-                        sol_omuz_y = (
-                            noktalar[self.mp_postur.PoseLandmark.LEFT_SHOULDER.value].y
+                        if (
+                            len(noktalar)
+                            > self.mp_postur.PoseLandmark.RIGHT_SHOULDER.value
+                        ):
+                            burun_y = (
+                                noktalar[self.mp_postur.PoseLandmark.NOSE.value].y
+                            )
+                            sol_omuz_y = (
+                                noktalar[
+                                    self.mp_postur.PoseLandmark.LEFT_SHOULDER.value
+                                ].y
+                            )
+                            sag_omuz_y = (
+                                noktalar[
+                                    self.mp_postur.PoseLandmark.RIGHT_SHOULDER.value
+                                ].y
+                            )
+
+                            ortalama_omuz_y = (sol_omuz_y + sag_omuz_y) / 2.0
+                            mesafe = ortalama_omuz_y - burun_y
+                            slouching_detected = bool(mesafe < POSTURE_THRESHOLD)
+
+                            if self._should_emit_posture(slouching_detected):
+                                self._emit_posture_update(slouching_detected, mesafe)
+
+                        self.mp_cizim.draw_landmarks(
+                            kare,
+                            sonuclar.pose_landmarks,
+                            self.mp_postur.POSE_CONNECTIONS,
                         )
-                        sag_omuz_y = (
-                            noktalar[self.mp_postur.PoseLandmark.RIGHT_SHOULDER.value].y
-                        )
-
-                        ortalama_omuz_y = (sol_omuz_y + sag_omuz_y) / 2.0
-                        mesafe = ortalama_omuz_y - burun_y
-                        slouching_detected = bool(mesafe < POSTURE_THRESHOLD)
-
-                        if self._should_emit_posture(slouching_detected):
-                            self._emit_posture_update(slouching_detected, mesafe)
-
-                    self.mp_cizim.draw_landmarks(
-                        kare,
-                        sonuclar.pose_landmarks,
-                        self.mp_postur.POSE_CONNECTIONS,
-                    )
 
                 now = time.time()
                 if now - self.last_frame_emit_at >= CAMERA_FRAME_EMIT_INTERVAL:

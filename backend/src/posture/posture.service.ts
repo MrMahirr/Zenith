@@ -84,6 +84,13 @@ export class PostureService implements OnModuleInit {
     return this.currentStatus;
   }
 
+  setInactive() {
+    this.currentStatus = {
+      isSlouching: false,
+      distance: 0,
+    };
+  }
+
   async getHistory(hours = 24): Promise<PostureHistoryPoint[]> {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
     const rows = await this.queryBucketedHistory(since, hours);

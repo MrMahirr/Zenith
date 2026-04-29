@@ -14,21 +14,33 @@ export function Camera() {
     const handleFrame = (b64: string) => {
       setFrame(`data:image/jpeg;base64,${b64}`);
     };
-    
+
     socket.on('camera_frame', handleFrame);
     return () => {
       socket.off('camera_frame', handleFrame);
     };
   }, [socket]);
 
+  const statusClass = !posture.isActive
+    ? 'camera-page__status--inactive'
+    : posture.isSlouching
+      ? 'camera-page__status--danger'
+      : 'camera-page__status--good';
+
+  const valueClass = !posture.isActive
+    ? 'text-muted'
+    : posture.isSlouching
+      ? 'text-danger'
+      : 'text-success';
+
   return (
     <div className="camera-page">
       <header className="camera-page__header">
         <button className="camera-page__back" onClick={() => navigate('/')} id="camera-back-btn">
-          ‹ Dashboard
+          {'<'} Dashboard
         </button>
-        <h1 className="camera-page__title">📷 Kamera Görüntüsü</h1>
-        <div className={`camera-page__status ${posture.isSlouching ? 'camera-page__status--danger' : 'camera-page__status--good'}`}>
+        <h1 className="camera-page__title">Kamera Goruntusu</h1>
+        <div className={`camera-page__status ${statusClass}`}>
           <div className="camera-page__status-dot" />
           <span>{posture.statusText}</span>
         </div>
@@ -37,17 +49,18 @@ export function Camera() {
       <main className="camera-page__content">
         <div className="camera-page__feed glass-card">
           {frame ? (
-            <img 
-              src={frame} 
-              alt="Kamera Canlı Akış" 
-              className="camera-page__video" 
+            <img
+              src={frame}
+              alt="Kamera Canli Akis"
+              className="camera-page__video"
             />
           ) : (
             <div className="camera-page__placeholder">
-              <span className="camera-page__placeholder-icon">🤖</span>
+              <span className="camera-page__placeholder-icon">[]</span>
               <p className="camera-page__placeholder-text">
-                Yapay Zeka (Python) kameraya bağlanıyor...<br />
-                Lütfen bekleyin. (Görüntü işlenerek buraya aktarılacak)
+                Kamera baglantisi bekleniyor...
+                <br />
+                Goruntu geldikten sonra burada gosterilecek.
               </p>
             </div>
           )}
@@ -55,15 +68,15 @@ export function Camera() {
 
         <div className="camera-page__info">
           <div className="camera-page__info-card glass-card">
-            <span className="label">Duruş Durumu</span>
-            <span className={`camera-page__info-value ${posture.isSlouching ? 'text-danger' : 'text-success'}`}>
+            <span className="label">Durus Durumu</span>
+            <span className={`camera-page__info-value ${valueClass}`}>
               {posture.statusText}
             </span>
           </div>
           <div className="camera-page__info-card glass-card">
             <span className="label">Omuz-Burun Mesafesi</span>
             <span className="camera-page__info-value mono">
-              {posture.distance > 0 ? posture.distance.toFixed(3) : '--'}
+              {posture.isActive && posture.distance > 0 ? posture.distance.toFixed(3) : '--'}
             </span>
           </div>
         </div>

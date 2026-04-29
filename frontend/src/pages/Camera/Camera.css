@@ -58,6 +58,11 @@
   color: var(--color-success);
 }
 
+.camera-page__status--inactive {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary);
+}
+
 .camera-page__status-dot {
   width: 8px;
   height: 8px;
@@ -71,6 +76,11 @@
 
 .camera-page__status--good .camera-page__status-dot {
   background: var(--color-success);
+}
+
+.camera-page__status--inactive .camera-page__status-dot {
+  background: var(--text-muted);
+  animation: none;
 }
 
 .camera-page__content {
@@ -141,6 +151,7 @@
 
 .text-danger { color: var(--color-danger); }
 .text-success { color: var(--color-success); }
+.text-muted { color: var(--text-secondary); }
 
 @media (max-width: 768px) {
   .camera-page__content {

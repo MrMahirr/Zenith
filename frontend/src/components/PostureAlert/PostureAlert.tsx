@@ -8,10 +8,15 @@ interface Props {
 
 export function PostureAlert({ posture }: Props) {
   const navigate = useNavigate();
+  const stateClass = !posture.isActive
+    ? 'posture-alert--inactive'
+    : posture.isSlouching
+      ? 'posture-alert--danger'
+      : 'posture-alert--good';
 
   return (
     <div
-      className={`posture-alert glass-card ${posture.isSlouching ? 'posture-alert--danger' : 'posture-alert--good'}`}
+      className={`posture-alert glass-card ${stateClass}`}
       onClick={() => navigate('/camera')}
       role="button"
       tabIndex={0}
@@ -21,10 +26,10 @@ export function PostureAlert({ posture }: Props) {
         <div className="posture-alert__dot" />
       </div>
       <div className="posture-alert__info">
-        <span className="posture-alert__label">Duruş Analizi</span>
+        <span className="posture-alert__label">Durus Analizi</span>
         <span className="posture-alert__status">{posture.statusText}</span>
       </div>
-      <div className="posture-alert__chevron">›</div>
+      <div className="posture-alert__chevron">{'>'}</div>
     </div>
   );
 }

@@ -23,6 +23,10 @@
   border-color: rgba(16, 185, 129, 0.2) !important;
 }
 
+.posture-alert--inactive {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
 .posture-alert__indicator {
   position: relative;
   width: 10px;
@@ -44,6 +48,12 @@
 .posture-alert--good .posture-alert__dot {
   background: var(--color-success);
   box-shadow: 0 0 10px var(--color-success);
+}
+
+.posture-alert--inactive .posture-alert__dot {
+  background: var(--text-muted);
+  box-shadow: none;
+  animation: none;
 }
 
 .posture-alert__info {
@@ -72,6 +82,10 @@
 
 .posture-alert--good .posture-alert__status {
   color: var(--color-success);
+}
+
+.posture-alert--inactive .posture-alert__status {
+  color: var(--text-secondary);
 }
 
 .posture-alert__chevron {

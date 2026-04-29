@@ -55,8 +55,8 @@ def main():
     signal.signal(signal.SIGTERM, _request_shutdown)
 
     try:
-        conn.connect(wait_for_backend=True)
         service = _build_service(args.service)
+        conn.connect(wait_for_backend=True)
         service.start()
 
         print(f"\n[{args.service.upper()}] Servis aktif. Cikmak icin Ctrl+C.\n")
