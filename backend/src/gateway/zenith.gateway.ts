@@ -21,6 +21,8 @@ import { NfcService } from '../nfc/nfc.service';
 export class ZenithGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
+  private readonly postureLedModes = new Set(['CODING', 'FOCUS']);
+
   @WebSocketServer()
   server: Server;
 
@@ -67,7 +69,9 @@ export class ZenithGateway
     _client: Socket,
     payload: { kambur_mu: boolean; mesafe: number },
   ) {
-    if (this.modeService.getCurrentMode().mode === 'PASSIVE') {
+    const currentMode = this.modeService.getCurrentMode().mode;
+
+    if (currentMode === 'PASSIVE') {
       return;
     }
 
@@ -80,7 +84,10 @@ export class ZenithGateway
       distance: payload.mesafe,
     });
 
-    if (previousStatus.isSlouching !== payload.kambur_mu) {
+    if (
+      this.postureLedModes.has(currentMode) &&
+      previousStatus.isSlouching !== payload.kambur_mu
+    ) {
       this.server.emit('led_command', {
         type: 'POSTURE',
         color: payload.kambur_mu ? '#EF4444' : '#10B981',

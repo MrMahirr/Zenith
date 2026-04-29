@@ -60,7 +60,7 @@ LED_COUNT = int(os.getenv("LED_COUNT", "60")) # 1 metre için 60 yaptık
 LED_PIN = int(os.getenv("LED_PIN", "18"))
 LED_FREQ_HZ = 800000
 LED_DMA = 10
-LED_BRIGHTNESS = 255
+LED_BRIGHTNESS = int(os.getenv("LED_BRIGHTNESS", "128"))
 LED_INVERT = False
 LED_CHANNEL = 0
 
