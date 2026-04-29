@@ -153,9 +153,7 @@ export class WeatherService {
       updatedAt: new Date(),
     };
 
-    const hourly = forecastData.list.slice(0, 8).map((entry) =>
-      this.mapHourlyEntry(entry),
-    );
+    const hourly = this.buildHourlyForecast(forecastData.list);
     const daily = this.buildDailyForecast(forecastData.list);
 
     return {
@@ -178,6 +176,75 @@ export class WeatherService {
       snow: this.roundValue(entry.snow?.['3h'] ?? 0),
       precipitationProbability: Math.round((entry.pop ?? 0) * 100),
     };
+  }
+
+  private buildHourlyForecast(list: ForecastListItem[]): HourlyForecastEntry[] {
+    if (list.length === 0) {
+      return [];
+    }
+
+    if (list.length === 1) {
+      return [this.mapHourlyEntry(list[0])];
+    }
+
+    const sourcePoints = list.slice(0, Math.min(9, list.length));
+    const hourly: HourlyForecastEntry[] = [];
+
+    for (let index = 0; index < sourcePoints.length - 1; index += 1) {
+      const start = sourcePoints[index];
+      const end = sourcePoints[index + 1];
+
+      for (let hourOffset = 0; hourOffset < 3; hourOffset += 1) {
+        const ratio = hourOffset / 3;
+        const reference = ratio >= 0.5 ? end : start;
+        const time = new Date((start.dt + hourOffset * 60 * 60) * 1000).toISOString();
+
+        hourly.push({
+          time,
+          temperature: Math.round(
+            this.interpolateValue(start.main.temp, end.main.temp, ratio),
+          ),
+          feelsLike: Math.round(
+            this.interpolateValue(
+              start.main.feels_like,
+              end.main.feels_like,
+              ratio,
+            ),
+          ),
+          description: reference.weather[0]?.description ?? 'Bilinmiyor',
+          icon: reference.weather[0]?.icon ?? '01d',
+          humidity: Math.round(
+            this.interpolateValue(start.main.humidity, end.main.humidity, ratio),
+          ),
+          windSpeed: this.roundValue(
+            this.interpolateValue(start.wind.speed, end.wind.speed, ratio),
+          ),
+          rain: this.roundValue(
+            this.interpolateValue(
+              start.rain?.['3h'] ?? 0,
+              end.rain?.['3h'] ?? 0,
+              ratio,
+            ) / 3,
+          ),
+          snow: this.roundValue(
+            this.interpolateValue(
+              start.snow?.['3h'] ?? 0,
+              end.snow?.['3h'] ?? 0,
+              ratio,
+            ) / 3,
+          ),
+          precipitationProbability: Math.round(
+            this.interpolateValue(
+              (start.pop ?? 0) * 100,
+              (end.pop ?? 0) * 100,
+              ratio,
+            ),
+          ),
+        });
+      }
+    }
+
+    return hourly.slice(0, 24);
   }
 
   private buildDailyForecast(list: ForecastListItem[]): DailyForecastEntry[] {
@@ -238,6 +305,10 @@ export class WeatherService {
     return Math.round(value * 10) / 10;
   }
 
+  private interpolateValue(start: number, end: number, ratio: number) {
+    return start + (end - start) * ratio;
+  }
+
   private getMockWeatherPanel(city: string): WeatherPanelData {
     const now = new Date();
     const current: WeatherData = {
@@ -251,18 +322,22 @@ export class WeatherService {
       updatedAt: now,
     };
 
-    const hourly = Array.from({ length: 8 }, (_, index) => ({
-      time: new Date(now.getTime() + index * 3 * 60 * 60 * 1000).toISOString(),
-      temperature: 22 + ((index % 3) - 1),
-      feelsLike: 23 + ((index % 3) - 1),
-      description: index % 4 === 2 ? 'Yagmurlu' : 'Parcali bulutlu',
-      icon: index % 4 === 2 ? '10d' : '02d',
-      humidity: 40 + index * 3,
-      windSpeed: this.roundValue(2.5 + index * 0.4),
-      rain: index % 4 === 2 ? 1.4 : 0,
-      snow: 0,
-      precipitationProbability: index % 4 === 2 ? 65 : 10,
-    }));
+    const hourly = Array.from({ length: 24 }, (_, index) => {
+      const rainyHour = index >= 10 && index <= 13;
+
+      return {
+        time: new Date(now.getTime() + index * 60 * 60 * 1000).toISOString(),
+        temperature: 21 + Math.round(Math.sin(index / 3) * 3),
+        feelsLike: 22 + Math.round(Math.sin(index / 3) * 3),
+        description: rainyHour ? 'Yagmurlu' : 'Parcali bulutlu',
+        icon: rainyHour ? '10d' : '02d',
+        humidity: 42 + (index % 8) * 4,
+        windSpeed: this.roundValue(2.3 + (index % 6) * 0.5),
+        rain: rainyHour ? 0.8 : 0,
+        snow: 0,
+        precipitationProbability: rainyHour ? 70 : 12,
+      };
+    });
 
     const daily = Array.from({ length: 5 }, (_, index) => ({
       date: new Date(now.getTime() + index * 24 * 60 * 60 * 1000).toISOString(),

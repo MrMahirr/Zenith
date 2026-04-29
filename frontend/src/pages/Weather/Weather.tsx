@@ -23,7 +23,7 @@ function WeatherSkeleton() {
       <div className="weather-page__section">
         <div className="weather-page__section-title weather-page__skeleton-line" />
         <div className="weather-page__hourly-grid">
-          {Array.from({ length: 6 }, (_, index) => (
+          {Array.from({ length: 8 }, (_, index) => (
             <div key={index} className="weather-page__hour-card glass-card weather-page__skeleton-card" />
           ))}
         </div>
@@ -65,13 +65,13 @@ export function Weather() {
           <section className="weather-page__hero glass-card">
             <div className="weather-page__hero-main">
               <span className="weather-page__hero-city">{panel.current.city}</span>
-              <strong className="weather-page__hero-temp">{panel.current.temperature}°</strong>
+              <strong className="weather-page__hero-temp">{panel.current.temperature}&deg;</strong>
               <span className="weather-page__hero-desc">{panel.current.description}</span>
             </div>
             <div className="weather-page__hero-metrics">
               <div className="weather-page__metric">
                 <span className="weather-page__metric-label">Hissedilen</span>
-                <span className="weather-page__metric-value">{panel.current.feelsLike}°</span>
+                <span className="weather-page__metric-value">{panel.current.feelsLike}&deg;</span>
               </div>
               <div className="weather-page__metric">
                 <span className="weather-page__metric-label">Nem</span>
@@ -87,14 +87,14 @@ export function Weather() {
           <section className="weather-page__section">
             <div className="weather-page__section-head">
               <h2 className="weather-page__section-title">Saatlik Tahmin</h2>
-              <span className="weather-page__section-note">3 saatlik adimlarla</span>
+              <span className="weather-page__section-note">Sonraki 24 saat</span>
             </div>
             <div className="weather-page__hourly-grid">
               {panel.hourly.map((entry) => (
                 <article key={entry.time} className="weather-page__hour-card glass-card">
                   <div className="weather-page__hour-top">
                     <span className="weather-page__hour-time">{formatHourLabel(entry.time)}</span>
-                    <span className="weather-page__hour-temp">{entry.temperature}°</span>
+                    <span className="weather-page__hour-temp">{entry.temperature}&deg;</span>
                   </div>
                   <p className="weather-page__hour-desc">{entry.description}</p>
                   <dl className="weather-page__meta-list">
@@ -134,8 +134,8 @@ export function Weather() {
                       <span className="weather-page__daily-date">{formatDateLabel(entry.date)}</span>
                     </div>
                     <div className="weather-page__daily-temp">
-                      <strong>{entry.maxTemp}°</strong>
-                      <span>{entry.minTemp}°</span>
+                      <strong>{entry.maxTemp}&deg;</strong>
+                      <span>{entry.minTemp}&deg;</span>
                     </div>
                   </div>
                   <p className="weather-page__daily-desc">{entry.description}</p>
