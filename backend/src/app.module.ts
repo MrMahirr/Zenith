@@ -10,6 +10,8 @@ import { PostureEvent } from './database/entities/posture-event.entity';
 import { ModeChange } from './database/entities/mode-change.entity';
 import { NfcChip } from './database/entities/nfc-chip.entity';
 import { NfcScanLog } from './database/entities/nfc-scan-log.entity';
+import { SensorMinuteSummary } from './database/entities/sensor-minute-summary.entity';
+import { PostureMinuteSummary } from './database/entities/posture-minute-summary.entity';
 
 // Feature Modules
 import { SensorModule } from './sensor/sensor.module';
@@ -31,7 +33,15 @@ import { NfcModule } from './nfc/nfc.module';
     TypeOrmModule.forRoot({
       type: 'better-sqlite3',
       database: process.env.DB_PATH || './zenith.sqlite',
-      entities: [SensorReading, PostureEvent, ModeChange, NfcChip, NfcScanLog],
+      entities: [
+        SensorReading,
+        PostureEvent,
+        ModeChange,
+        NfcChip,
+        NfcScanLog,
+        SensorMinuteSummary,
+        PostureMinuteSummary,
+      ],
       synchronize: true, // Geliştirme aşamasında – production'da migration kullanılacak
     }),
 

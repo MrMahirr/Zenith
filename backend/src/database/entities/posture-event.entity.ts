@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
 @Entity('posture_events')
 export class PostureEvent {
@@ -11,6 +11,7 @@ export class PostureEvent {
   @Column({ type: 'float' })
   distance: number;
 
+  @Index('idx_posture_events_created_at')
   @CreateDateColumn()
   createdAt: Date;
 }

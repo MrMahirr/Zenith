@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
 @Entity('sensor_readings')
 export class SensorReading {
@@ -14,6 +14,7 @@ export class SensorReading {
   @Column({ type: 'float' })
   pressure: number;
 
+  @Index('idx_sensor_readings_created_at')
   @CreateDateColumn()
   createdAt: Date;
 }
