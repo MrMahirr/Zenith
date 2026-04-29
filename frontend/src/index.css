@@ -89,6 +89,18 @@ html, body {
   width: 100%;
 }
 
+.route-loading {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
 /* ─── Scrollbar ─── */
 ::-webkit-scrollbar {
   width: 4px;
