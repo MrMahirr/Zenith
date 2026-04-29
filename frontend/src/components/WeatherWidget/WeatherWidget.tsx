@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import type { WeatherData } from '../../hooks/useWeather';
 import './WeatherWidget.css';
 
@@ -6,30 +7,50 @@ interface Props {
 }
 
 const WEATHER_ICONS: Record<string, string> = {
-  '01d': '☀️', '01n': '🌙',
-  '02d': '⛅', '02n': '☁️',
-  '03d': '☁️', '03n': '☁️',
-  '04d': '☁️', '04n': '☁️',
-  '09d': '🌧️', '09n': '🌧️',
-  '10d': '🌦️', '10n': '🌧️',
-  '11d': '⛈️', '11n': '⛈️',
-  '13d': '❄️', '13n': '❄️',
-  '50d': '🌫️', '50n': '🌫️',
+  '01d': 'Gunes',
+  '01n': 'Ay',
+  '02d': 'Bulut',
+  '02n': 'Bulut',
+  '03d': 'Bulut',
+  '03n': 'Bulut',
+  '04d': 'Kapali',
+  '04n': 'Kapali',
+  '09d': 'Sag.',
+  '09n': 'Sag.',
+  '10d': 'Yagmur',
+  '10n': 'Yagmur',
+  '11d': 'Firt.',
+  '11n': 'Firt.',
+  '13d': 'Kar',
+  '13n': 'Kar',
+  '50d': 'Sis',
+  '50n': 'Sis',
 };
 
 export function WeatherWidget({ weather }: Props) {
+  const navigate = useNavigate();
+
   if (!weather) {
     return (
-      <div className="weather-widget">
+      <button
+        className="weather-widget weather-widget--button"
+        type="button"
+        onClick={() => navigate('/weather')}
+      >
         <span className="weather-widget__loading">...</span>
-      </div>
+      </button>
     );
   }
 
-  const icon = WEATHER_ICONS[weather.icon] || '🌤️';
+  const icon = WEATHER_ICONS[weather.icon] || 'Hava';
 
   return (
-    <div className="weather-widget" id="weather-widget">
+    <button
+      className="weather-widget weather-widget--button"
+      type="button"
+      id="weather-widget"
+      onClick={() => navigate('/weather')}
+    >
       <div className="weather-widget__main">
         <span className="weather-widget__icon">{icon}</span>
         <span className="weather-widget__temp">{weather.temperature}°</span>
@@ -38,6 +59,6 @@ export function WeatherWidget({ weather }: Props) {
         <span className="weather-widget__city">{weather.city}</span>
         <span className="weather-widget__desc">{weather.description}</span>
       </div>
-    </div>
+    </button>
   );
 }

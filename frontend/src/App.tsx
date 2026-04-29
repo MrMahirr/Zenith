@@ -22,6 +22,12 @@ const NfcManagement = lazy(() =>
   })),
 );
 
+const Weather = lazy(() =>
+  import('./pages/Weather/Weather').then((module) => ({
+    default: module.Weather,
+  })),
+);
+
 function RouteLoadingFallback() {
   return <div className="route-loading">Yukleniyor...</div>;
 }
@@ -36,6 +42,7 @@ function App() {
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/camera" element={<Camera />} />
             <Route path="/nfc" element={<NfcManagement />} />
+            <Route path="/weather" element={<Weather />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

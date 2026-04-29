@@ -7,6 +7,11 @@ export class WeatherController {
 
   @Get()
   async getWeather() {
-    return this.weatherService.getWeather();
+    return this.weatherService.getCurrentWeather();
+  }
+
+  @Get('panel')
+  async getWeatherPanel() {
+    return this.weatherService.getWeatherPanel();
   }
 }
