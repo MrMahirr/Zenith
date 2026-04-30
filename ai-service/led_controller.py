@@ -47,6 +47,7 @@ class LEDController:
         self.strip = None
         self.has_hardware = False
         self.hardware_error = None
+        self._lock = threading.Lock()
 
         self._initialize_hardware()
         self.conn.on("led_command", self._handle_command)
@@ -107,14 +108,15 @@ class LEDController:
         if not self.has_hardware or self.strip is None:
             return
 
-        try:
-            for i in range(self.strip.numPixels()):
-                self.strip.setPixelColor(i, color)
-            self.strip.show()
-        except Exception as exc:
-            self.has_hardware = False
-            self.hardware_error = exc
-            print(f"[LED] Donanim yazma hatasi, mock moda geciliyor: {exc}")
+        with self._lock:
+            try:
+                for i in range(self.strip.numPixels()):
+                    self.strip.setPixelColor(i, color)
+                self.strip.show()
+            except Exception as exc:
+                self.has_hardware = False
+                self.hardware_error = exc
+                print(f"[LED] Donanim yazma hatasi, mock moda geciliyor: {exc}")
 
     def start(self):
         self.running = True
