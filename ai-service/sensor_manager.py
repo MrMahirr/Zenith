@@ -8,7 +8,7 @@ from connection_manager import ConnectionManager
 try:
     import smbus2
     import bme280
-    import adafruit_ads1x15.ads1115 as ADS
+    from adafruit_ads1x15.ads1115 import ADS1115, P0
     from adafruit_ads1x15.analog_in import AnalogIn
     HAS_HARDWARE = True
 except ImportError:
@@ -33,8 +33,8 @@ class SensorManager:
                     self.i2c_bus = LinuxI2C(I2C_PORT)
 
                 # ADS1115 Başlatma
-                self.ads = ADS.ADS1115(self.i2c_bus)
-                self.mq135_channel = AnalogIn(self.ads, ADS.P0)
+                self.ads = ADS1115(self.i2c_bus)
+                self.mq135_channel = AnalogIn(self.ads, P0)
 
                 # BME280 Başlatma (Aynı portu smbus2 ile açıyoruz)
                 self.bus = smbus2.SMBus(I2C_PORT)
