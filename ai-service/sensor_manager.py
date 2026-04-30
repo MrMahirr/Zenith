@@ -9,8 +9,13 @@ HAS_HARDWARE = False
 try:
     import smbus2
     import bme280
-    from adafruit_ads1x15.ads1115 import ADS1115, P0
+    import adafruit_ads1x15.ads1115 as ads_mod
+    from adafruit_ads1x15.ads1115 import ADS1115
     from adafruit_ads1x15.analog_in import AnalogIn
+    
+    # Bazı versiyonlarda P0 modül altındadır, bazılarında ADS1115 sınıfı içindedir.
+    # En garanti yol:
+    P0_PIN = getattr(ads_mod, 'P0', 0) 
     HAS_HARDWARE = True
 except ImportError as e:
     print(f"UYARI: Donanım kütüphaneleri eksik ({e}). Mock mod aktif.")
@@ -36,7 +41,7 @@ class SensorManager:
 
                 # ADS1115 Başlatma
                 self.ads = ADS1115(self.i2c_bus)
-                self.mq135_channel = AnalogIn(self.ads, P0)
+                self.mq135_channel = AnalogIn(self.ads, P0_PIN)
 
                 # BME280 Başlatma (Aynı portu smbus2 ile açıyoruz)
                 self.bus = smbus2.SMBus(I2C_PORT)
