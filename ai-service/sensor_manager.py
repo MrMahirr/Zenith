@@ -91,12 +91,12 @@ class SensorManager:
         if hasattr(self, 'bus'):
             self.bus.close()
         print("[Sensör] Servis durduruldu.")
-        if __name__ == "__main__":
-            manager = SensorManager()
-            manager.start()
-            try:
-                # Servisin kapanmamasını sağlayan sonsuz döngü
-                while True:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                manager.stop()
+if __name__ == "__main__":
+    manager = SensorManager()
+    manager.start()
+    try:
+        # Servisin kapanmamasını sağlayan sonsuz döngü
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        manager.stop()
