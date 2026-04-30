@@ -63,8 +63,10 @@ def main():
 
         while not stop_event.wait(1):
             pass
-    except KeyboardInterrupt:
-        print("\n[Sistem] Kapatilma istegi alindi...")
+    except Exception as exc:
+        print(f"\n[KRITIK] Servis baslatilamadi: {exc}")
+        import traceback
+        traceback.print_exc()
         stop_event.set()
     finally:
         print(f"[Sistem] {args.service.upper()} servisi guvenli sekilde kapatiliyor...")
@@ -75,7 +77,6 @@ def main():
                 print(f"[Hata] Durdurulurken hata olustu: {exc}")
         conn.disconnect()
         print("[Sistem] Cikis yapildi.")
-        sys.exit(0)
 
 
 if __name__ == "__main__":
