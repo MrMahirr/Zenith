@@ -24,29 +24,26 @@ class SensorManager:
 
         if HAS_HARDWARE:
             try:
-                # BME280 Başlatma (smbus2 zaten I2C_PORT kullanıyor)
-                self.bus = smbus2.SMBus(I2C_PORT)
-                self.calibration_params = bme280.load_calibration_params(self.bus, BME280_ADDRESS)
-
-                # ADS1115 Başlatma
-                # busio.I2C varsayılan portu (1) kullanır. 
-                # Port 3'ü kullanabilmek için ExtendedI2C veya blinka alt yapısını kullanıyoruz.
+                # Önce ADS1115 için I2C Bus 3'ü hazırlayalım
                 try:
                     from adafruit_extended_bus import ExtendedI2C as I2C
                     self.i2c_bus = I2C(I2C_PORT)
                 except ImportError:
-                    # Alternatif: Eğer kütüphane yoksa doğrudan blinka'nın linux i2c implementasyonunu deneyelim
                     from adafruit_blinka.microcontroller.generic_linux.i2c import I2C as LinuxI2C
                     self.i2c_bus = LinuxI2C(I2C_PORT)
 
+                # ADS1115 Başlatma
                 self.ads = ADS.ADS1115(self.i2c_bus)
                 self.mq135_channel = AnalogIn(self.ads, ADS.P0)
+
+                # BME280 Başlatma (Aynı portu smbus2 ile açıyoruz)
+                self.bus = smbus2.SMBus(I2C_PORT)
+                self.calibration_params = bme280.load_calibration_params(self.bus, BME280_ADDRESS)
+                self.has_hw = True
 
             except Exception as e:
                 print(f"[Sensör] Donanım başlatma hatası: {e}")
                 self.has_hw = False
-            else:
-                self.has_hw = True
         else:
             self.has_hw = False
 
