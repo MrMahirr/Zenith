@@ -5,15 +5,17 @@ import busio
 from config import I2C_PORT, BME280_ADDRESS
 from connection_manager import ConnectionManager
 
+HAS_HARDWARE = False
 try:
     import smbus2
     import bme280
     from adafruit_ads1x15.ads1115 import ADS1115, P0
     from adafruit_ads1x15.analog_in import AnalogIn
     HAS_HARDWARE = True
-except ImportError:
-    HAS_HARDWARE = False
-    print("UYARI: BME280 veya ADS1115 kütüphaneleri bulunamadı. Mock mod aktif.")
+except ImportError as e:
+    print(f"UYARI: Donanım kütüphaneleri eksik ({e}). Mock mod aktif.")
+except Exception as e:
+    print(f"UYARI: Donanım başlatılamadı ({e}). Mock mod aktif.")
 
 class SensorManager:
     def __init__(self):
