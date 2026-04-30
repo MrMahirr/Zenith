@@ -53,7 +53,13 @@ export class ZenithGateway
   @SubscribeMessage('sensor_update')
   async handleSensorUpdate(
     _client: Socket,
-    payload: { temp: number; humidity: number; pressure: number },
+    payload: {
+      temp: number;
+      humidity: number;
+      pressure: number;
+      air_quality: number;
+      gas_voltage: number;
+    },
   ) {
     await this.sensorService.saveReading(payload);
     this.server.emit('dashboard_sensor_data', payload);

@@ -14,6 +14,12 @@ export class SensorReading {
   @Column({ type: 'float' })
   pressure: number;
 
+  @Column({ type: 'float', nullable: true })
+  airQuality: number;
+
+  @Column({ type: 'float', nullable: true })
+  gasVoltage: number;
+
   @Index('idx_sensor_readings_created_at')
   @CreateDateColumn()
   createdAt: Date;

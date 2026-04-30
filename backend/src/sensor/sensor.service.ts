@@ -18,6 +18,8 @@ export interface SensorHistoryPoint {
   temperature: number;
   humidity: number;
   pressure: number;
+  airQuality: number;
+  gasVoltage: number;
   sampleCount: number;
 }
 
@@ -26,6 +28,8 @@ interface SensorSummaryRow {
   avgTemperature: number;
   avgHumidity: number;
   avgPressure: number;
+  avgAirQuality: number;
+  avgGasVoltage: number;
   sampleCount: number;
   sourceMaxCreatedAt: string;
 }
@@ -35,6 +39,8 @@ interface SensorHistoryRow {
   temperature: number;
   humidity: number;
   pressure: number;
+  airQuality: number;
+  gasVoltage: number;
   sampleCount: number;
 }
 
@@ -59,17 +65,21 @@ export class SensorService implements OnModuleInit {
     temp: number;
     humidity: number;
     pressure: number;
+    air_quality?: number;
+    gas_voltage?: number;
   }): Promise<SensorReading> {
     const reading = this.sensorRepo.create({
       temperature: data.temp,
       humidity: data.humidity,
       pressure: data.pressure,
+      airQuality: data.air_quality,
+      gasVoltage: data.gas_voltage,
     });
 
     const saved = await this.sensorRepo.save(reading);
     this.latestReading = saved;
     this.logger.log(
-      `Sensor saved: ${data.temp}C | %${data.humidity} | ${data.pressure}hPa`,
+      `Sensor saved: ${data.temp}C | %${data.humidity} | ${data.pressure}hPa | AQ: ${data.air_quality ?? 'N/A'}`,
     );
     return saved;
   }
@@ -86,6 +96,8 @@ export class SensorService implements OnModuleInit {
       temperature: Number(row.temperature),
       humidity: Number(row.humidity),
       pressure: Number(row.pressure),
+      airQuality: Number(row.airQuality),
+      gasVoltage: Number(row.gasVoltage),
       sampleCount: Number(row.sampleCount),
     }));
   }
@@ -110,6 +122,8 @@ export class SensorService implements OnModuleInit {
             ROUND(AVG(temperature), 3) AS avgTemperature,
             ROUND(AVG(humidity), 3) AS avgHumidity,
             ROUND(AVG(pressure), 3) AS avgPressure,
+            ROUND(AVG(airQuality), 3) AS avgAirQuality,
+            ROUND(AVG(gasVoltage), 3) AS avgGasVoltage,
             COUNT(*) AS sampleCount,
             MAX(createdAt) AS sourceMaxCreatedAt
           FROM sensor_readings
@@ -127,6 +141,8 @@ export class SensorService implements OnModuleInit {
             avgTemperature: Number(row.avgTemperature),
             avgHumidity: Number(row.avgHumidity),
             avgPressure: Number(row.avgPressure),
+            avgAirQuality: Number(row.avgAirQuality),
+            avgGasVoltage: Number(row.avgGasVoltage),
             sampleCount: Number(row.sampleCount),
             sourceMaxCreatedAt: row.sourceMaxCreatedAt,
           })),
@@ -179,6 +195,8 @@ export class SensorService implements OnModuleInit {
               ROUND(AVG(temperature), 3) AS temperature,
               ROUND(AVG(humidity), 3) AS humidity,
               ROUND(AVG(pressure), 3) AS pressure,
+              ROUND(AVG(airQuality), 3) AS airQuality,
+              ROUND(AVG(gasVoltage), 3) AS gasVoltage,
               COUNT(*) AS sampleCount
             FROM sensor_readings
             WHERE createdAt >= ?
@@ -207,6 +225,8 @@ export class SensorService implements OnModuleInit {
             ROUND(SUM(source.temperatureWeighted) / SUM(source.sampleCount), 3) AS temperature,
             ROUND(SUM(source.humidityWeighted) / SUM(source.sampleCount), 3) AS humidity,
             ROUND(SUM(source.pressureWeighted) / SUM(source.sampleCount), 3) AS pressure,
+            ROUND(SUM(source.airQualityWeighted) / SUM(source.sampleCount), 3) AS airQuality,
+            ROUND(SUM(source.gasVoltageWeighted) / SUM(source.sampleCount), 3) AS gasVoltage,
             SUM(source.sampleCount) AS sampleCount
           FROM (
             SELECT
@@ -214,6 +234,8 @@ export class SensorService implements OnModuleInit {
               avgTemperature * sampleCount AS temperatureWeighted,
               avgHumidity * sampleCount AS humidityWeighted,
               avgPressure * sampleCount AS pressureWeighted,
+              avgAirQuality * sampleCount AS airQualityWeighted,
+              avgGasVoltage * sampleCount AS gasVoltageWeighted,
               sampleCount
             FROM sensor_minute_summaries
             WHERE minuteBucket >= ?
@@ -226,6 +248,8 @@ export class SensorService implements OnModuleInit {
               temperature AS temperatureWeighted,
               humidity AS humidityWeighted,
               pressure AS pressureWeighted,
+              airQuality AS airQualityWeighted,
+              gasVoltage AS gasVoltageWeighted,
               1 AS sampleCount
             FROM sensor_readings
             WHERE createdAt >= ?

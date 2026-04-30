@@ -135,6 +135,7 @@ export function Analytics() {
             }),
             sicaklik: d.temperature,
             nem: d.humidity,
+            hava: d.airQuality,
           })),
         );
 
@@ -235,6 +236,10 @@ export function Analytics() {
                     <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.3} />
                     <stop offset="95%" stopColor="#06B6D4" stopOpacity={0} />
                   </linearGradient>
+                  <linearGradient id="airGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="time" stroke="rgba(255,255,255,0.2)" fontSize={10} />
@@ -248,8 +253,9 @@ export function Analytics() {
                   }}
                   labelStyle={{ color: '#94A3B8' }}
                 />
-                <Area type="monotone" dataKey="sicaklik" stroke="#F97316" fill="url(#tempGrad)" strokeWidth={2} />
-                <Area type="monotone" dataKey="nem" stroke="#06B6D4" fill="url(#humGrad)" strokeWidth={2} />
+                <Area type="monotone" dataKey="sicaklik" stroke="#F97316" fill="url(#tempGrad)" strokeWidth={2} name="Sıcaklık (°C)" />
+                <Area type="monotone" dataKey="nem" stroke="#06B6D4" fill="url(#humGrad)" strokeWidth={2} name="Nem (%)" />
+                <Area type="monotone" dataKey="hava" stroke="#10B981" fill="url(#airGrad)" strokeWidth={2} name="Hava Kalitesi (%)" />
                 <Legend wrapperStyle={{ fontSize: '11px', color: '#94A3B8' }} />
               </AreaChart>
             </ResponsiveContainer>

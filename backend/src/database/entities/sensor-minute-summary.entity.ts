@@ -14,6 +14,12 @@ export class SensorMinuteSummary {
   @Column({ type: 'float' })
   avgPressure: number;
 
+  @Column({ type: 'float', nullable: true })
+  avgAirQuality: number;
+
+  @Column({ type: 'float', nullable: true })
+  avgGasVoltage: number;
+
   @Column({ type: 'integer' })
   sampleCount: number;
 

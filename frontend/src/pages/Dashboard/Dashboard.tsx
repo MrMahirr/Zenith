@@ -22,6 +22,20 @@ export function Dashboard() {
   const weather = useWeather();
   const navigate = useNavigate();
 
+  const getAirQualityStatus = (value: number | null) => {
+    if (value === null) return '...';
+    if (value < 20) return 'Temiz';
+    if (value < 40) return 'İyi';
+    if (value < 60) return 'Orta';
+    if (value < 80) return 'Kötü';
+    return 'Tehlikeli';
+  };
+
+  const aqStatus = getAirQualityStatus(sensor.airQuality);
+  const aqColor = sensor.airQuality === null ? '#94A3B8' :
+    sensor.airQuality < 40 ? '#10B981' :
+    sensor.airQuality < 70 ? '#F59E0B' : '#EF4444';
+
   return (
     <div
       className="dashboard"
@@ -65,11 +79,11 @@ export function Dashboard() {
           accentColor="#06B6D4"
         />
         <SensorCard
-          icon={<img src={windIcon} alt="Nem" className="dashboard__sensor-icon" />}
+          icon={<img src={windIcon} alt="Hava" className="dashboard__sensor-icon" />}
           label="Hava Kalitesi"
-          value="İyi"
-          unit=""
-          accentColor="#10B981"
+          value={aqStatus}
+          unit={sensor.airQuality !== null ? `(${sensor.airQuality}%)` : ''}
+          accentColor={aqColor}
         />
         <button
           className="dashboard__chart-btn glass-card"
