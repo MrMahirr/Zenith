@@ -16,6 +16,7 @@ module.exports = {
       cwd: '/home/mahir/Zenith/frontend',
       script: 'npm',
       args: 'run serve:prod',
+      shell: true,
       env: {
         NODE_ENV: 'production',
       },
@@ -40,6 +41,6 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       kill_timeout: 5000,
-    },
+    }
   ],
 };

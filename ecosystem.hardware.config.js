@@ -8,7 +8,7 @@ module.exports = {
       interpreter: 'none',
       exec_mode: 'fork',
       autorestart: true,
-      restart_delay: 2000,
+      restart_delay: 3000,
       kill_timeout: 5000,
     },
     {
@@ -19,7 +19,7 @@ module.exports = {
       interpreter: 'none',
       exec_mode: 'fork',
       autorestart: true,
-      restart_delay: 2000,
+      restart_delay: 3000,
       kill_timeout: 5000,
     },
   ],
