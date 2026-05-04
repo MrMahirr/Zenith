@@ -116,7 +116,9 @@ class LEDController:
             except Exception as exc:
                 self.has_hardware = False
                 self.hardware_error = exc
-                print(f"[LED] Donanim yazma hatasi, mock moda geciliyor: {exc}")
+                print(f"[LED] Donanim yazma hatasi (Muhtemelen DMA/PWM cakismasi): {exc}")
+                print("[LED] Ipucu: Raspberry Pi'da ses (Audio) cikisi PWM ile cakısıyor olabilir.")
+                print("[LED] /boot/config.txt icinde 'dtparam=audio=on' satirini 'off' yapmayi deneyin.")
 
     def start(self):
         self.running = True
