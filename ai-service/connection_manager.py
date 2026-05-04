@@ -90,33 +90,38 @@ class ConnectionManager:
 
             time.sleep(BACKEND_RETRY_INTERVAL)
 
-    def connect(self, wait_for_backend=True, timeout=BACKEND_WAIT_TIMEOUT):
+    def connect(self, wait_for_backend=False, timeout=BACKEND_WAIT_TIMEOUT):
+        """
+        Backend'e baglanir. 
+        wait_for_backend=True ise sunucu aktif olana kadar bekler.
+        False ise bir kez dener ve arka planda baglanmaya devam eder.
+        """
         if self.is_connected or self.sio.connected:
             return True
 
         self._shutting_down = False
-        deadline = self._get_deadline(timeout)
-
+        
         if wait_for_backend:
-            self.wait_for_backend(timeout=timeout)
-
-        while not self.is_connected and not self.sio.connected:
-            self._ensure_not_timed_out(deadline)
-
             try:
-                self.sio.connect(BACKEND_URL, wait_timeout=5)
-            except Exception as exc:
-                if not self._connect_error_logged:
-                    print(
-                        "[Baglanti] Backend socket hazir degil, tekrar denenecek: "
-                        f"{exc}"
-                    )
-                    self._connect_error_logged = True
-                time.sleep(BACKEND_RETRY_INTERVAL)
-            else:
-                return True
+                self.wait_for_backend(timeout=timeout)
+            except TimeoutError as exc:
+                print(f"[Baglanti] Backend bekleme suresi doldu: {exc}")
+                # Bekleme dolsa bile devam etmeye calis, arka planda baglanir.
 
-        return True
+        # İlk baglanti denemesi
+        try:
+            # wait_timeout=5 saniye boyunca sunucuya ulasmaya calisir.
+            # Eger sunucu yoksa bile asenkron reconnection aktif oldugu icin hata firlatmaz.
+            self.sio.connect(BACKEND_URL, wait_timeout=5)
+            return True
+        except Exception as exc:
+            if not self._connect_error_logged:
+                print(
+                    f"[Baglanti] Backend'e su an ulasilamiyor ({exc}). "
+                    "Servis baslatiliyor, baglanti arka planda saglanacak..."
+                )
+                self._connect_error_logged = True
+            return False
 
     def emit(self, event, data=None):
         if not self.is_connected:

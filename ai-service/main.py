@@ -56,7 +56,8 @@ def main():
 
     try:
         service = _build_service(args.service)
-        conn.connect(wait_for_backend=True)
+        # Backend hazir olmasa bile servisi baslat (asenkron baglanti)
+        conn.connect(wait_for_backend=False)
         service.start()
 
         print(f"\n[{args.service.upper()}] Servis aktif. Cikmak icin Ctrl+C.\n")

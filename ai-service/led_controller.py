@@ -121,10 +121,25 @@ class LEDController:
     def start(self):
         self.running = True
         print("[LED] Kontrol servisi baslatildi...")
-        self._set_color(Color(0, 0, 0))
+        
+        # Donanim saglik testi (Self-test)
+        self._self_test()
 
         self.thread = threading.Thread(target=self._anim_loop, daemon=True)
         self.thread.start()
+
+    def _self_test(self):
+        """Baslangicta donanimi test etmek icin kisa sureli mavi yakar."""
+        if not self.has_hardware:
+            print("[LED] Self-test atlandi: Donanim erisimi yok.")
+            return
+
+        print("[LED] Self-test baslatiliyor (Mavi goz kirpma)...")
+        test_color = Color(0, 0, 255) # Mavi
+        self._set_color(test_color)
+        time.sleep(1.0)
+        self._set_color(Color(0, 0, 0))
+        print("[LED] Self-test tamamlandi.")
 
     def _anim_loop(self):
         while self.running:

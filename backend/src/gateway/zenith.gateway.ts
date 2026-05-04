@@ -21,7 +21,7 @@ import { NfcService } from '../nfc/nfc.service';
 export class ZenithGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
-  private readonly postureLedModes = new Set(['CODING', 'FOCUS']);
+  private readonly postureLedModes = new Set(['CODING', 'FOCUS', 'RELAX', 'MEETING']);
 
   @WebSocketServer()
   server: Server;
