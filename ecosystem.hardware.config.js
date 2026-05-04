@@ -3,8 +3,8 @@ module.exports = {
     {
       name: 'zenith-led',
       cwd: '/home/mahir/Zenith/ai-service',
-      script: '/home/mahir/miniforge3/envs/zenith-ai/bin/python',
-      args: 'main.py --service led',
+      script: 'sudo',
+      args: '/home/mahir/miniforge3/envs/zenith-ai/bin/python main.py --service led',
       interpreter: 'none',
       exec_mode: 'fork',
       autorestart: true,
