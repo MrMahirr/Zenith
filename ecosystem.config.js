@@ -14,7 +14,7 @@ module.exports = {
     {
       name: 'zenith-frontend',
       cwd: '/home/mahir/Zenith/frontend',
-      script: 'npm',
+      script: '/usr/bin/npm',
       args: 'run serve:prod',
       shell: true,
       env: {
