@@ -65,7 +65,7 @@ class GecikmesizKamera:
                         start = bytes_data.find(b"\xff\xd8")
 
                         if start == -1:
-                            if len(bytes_data) > 1024 * 1024:
+                            if len(bytes_data) > 256 * 1024:
                                 del bytes_data[:-4096]
                             continue
 
@@ -113,6 +113,9 @@ class PostureAnalyzer:
         self.last_posture_emit_at = 0.0
         self.last_distance = 0.0
 
+        self.last_pose_landmarks = None
+        self._frame_counter = 0
+
         self.mp_cizim = mp.solutions.drawing_utils
         self.mp_postur = mp.solutions.pose
         self.postur = self.mp_postur.Pose(
@@ -157,6 +160,7 @@ class PostureAnalyzer:
     def _handle_mode_change(self, payload):
         mode = (payload or {}).get("mode", "PASSIVE")
         self.analysis_enabled = mode != "PASSIVE"
+        self._frame_counter = 0
 
         if self.analysis_enabled:
             print(f"[Kamera] Postur analizi aktif: {mode}")
@@ -165,6 +169,7 @@ class PostureAnalyzer:
         self.is_currently_slouching = None
         self.last_distance = 0.0
         self.last_posture_emit_at = 0.0
+        self.last_pose_landmarks = None
         print("[Kamera] Serbest mod aktif. Postur analizi devre disi.")
 
     def _process_frames(self):
@@ -176,40 +181,50 @@ class PostureAnalyzer:
                     continue
 
                 if self.analysis_enabled:
-                    kare_rgb = cv2.cvtColor(kare, cv2.COLOR_BGR2RGB)
-                    sonuclar = self.postur.process(kare_rgb)
+                    # Sadece her 3 karede bir MediaPipe analizi yaparak CPU yükünü azaltalım
+                    self._frame_counter += 1
+                    if self._frame_counter % 3 == 0:
+                        kare_rgb = cv2.cvtColor(kare, cv2.COLOR_BGR2RGB)
+                        kare_rgb.flags.writeable = False  # MediaPipe'ın gereksiz yere bellek kopyalamasını engelle
+                        sonuclar = self.postur.process(kare_rgb)
+                        kare_rgb.flags.writeable = True
 
-                    if sonuclar.pose_landmarks:
-                        noktalar = sonuclar.pose_landmarks.landmark
+                        if sonuclar.pose_landmarks:
+                            self.last_pose_landmarks = sonuclar.pose_landmarks
+                            noktalar = sonuclar.pose_landmarks.landmark
 
-                        if (
-                            len(noktalar)
-                            > self.mp_postur.PoseLandmark.RIGHT_SHOULDER.value
-                        ):
-                            burun_y = (
-                                noktalar[self.mp_postur.PoseLandmark.NOSE.value].y
-                            )
-                            sol_omuz_y = (
-                                noktalar[
-                                    self.mp_postur.PoseLandmark.LEFT_SHOULDER.value
-                                ].y
-                            )
-                            sag_omuz_y = (
-                                noktalar[
-                                    self.mp_postur.PoseLandmark.RIGHT_SHOULDER.value
-                                ].y
-                            )
+                            if (
+                                len(noktalar)
+                                > self.mp_postur.PoseLandmark.RIGHT_SHOULDER.value
+                            ):
+                                burun_y = (
+                                    noktalar[self.mp_postur.PoseLandmark.NOSE.value].y
+                                )
+                                sol_omuz_y = (
+                                    noktalar[
+                                        self.mp_postur.PoseLandmark.LEFT_SHOULDER.value
+                                    ].y
+                                )
+                                sag_omuz_y = (
+                                    noktalar[
+                                        self.mp_postur.PoseLandmark.RIGHT_SHOULDER.value
+                                    ].y
+                                )
 
-                            ortalama_omuz_y = (sol_omuz_y + sag_omuz_y) / 2.0
-                            mesafe = ortalama_omuz_y - burun_y
-                            slouching_detected = bool(mesafe < POSTURE_THRESHOLD)
+                                ortalama_omuz_y = (sol_omuz_y + sag_omuz_y) / 2.0
+                                mesafe = ortalama_omuz_y - burun_y
+                                slouching_detected = bool(mesafe < POSTURE_THRESHOLD)
 
-                            if self._should_emit_posture(slouching_detected):
-                                self._emit_posture_update(slouching_detected, mesafe)
+                                if self._should_emit_posture(slouching_detected):
+                                    self._emit_posture_update(slouching_detected, mesafe)
+                        else:
+                            self.last_pose_landmarks = None
 
+                    # Çizimleri en son tespit edilen (cached) landmark'larla yaparak görsel akıcılığı koruyalım
+                    if self.last_pose_landmarks:
                         self.mp_cizim.draw_landmarks(
                             kare,
-                            sonuclar.pose_landmarks,
+                            self.last_pose_landmarks,
                             self.mp_postur.POSE_CONNECTIONS,
                         )
 
