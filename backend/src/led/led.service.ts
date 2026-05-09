@@ -49,6 +49,16 @@ export class LedService {
     return this.state;
   }
 
+  /** Sadece parlaklığı günceller (otomatik mod dahil olmak üzere) */
+  setBrightness(brightness: number): LedState {
+    this.state = {
+      ...this.state,
+      brightness,
+    };
+    this.logger.log(`[LED] Brightness Updated: ${brightness}`);
+    return this.state;
+  }
+
   /** Mevcut durumu döndürür */
   getState(): LedState {
     return this.state;

@@ -99,6 +99,7 @@ export class ZenithGateway
         type: 'POSTURE',
         color: payload.kambur_mu ? '#EF4444' : '#10B981',
         duration: payload.kambur_mu ? 0 : 2000,
+        brightness: this.ledService.getState().brightness,
       });
     }
   }
@@ -133,6 +134,15 @@ export class ZenithGateway
     client.emit('led_state_sync', this.ledService.getState());
   }
 
+  @SubscribeMessage('led_set_brightness')
+  handleLedSetBrightness(_client: Socket, payload: { brightness: number }) {
+    this.ledService.setBrightness(payload.brightness);
+    const currentState = this.ledService.getState();
+    // Eger LED açıksa veya otomatikteyse doğrudan fiziksel donanıma da gönder,
+    // (python color gelmezse target_color'u hatırlamıyor, bu yüzden sadece led_state_sync ile state'i güncelliyoruz)
+    this.server.emit('led_state_sync', currentState);
+  }
+
   @SubscribeMessage('nfc_chip_scanned')
   async handleNfcChipScanned(
     _client: Socket,
@@ -151,6 +161,7 @@ export class ZenithGateway
           type: 'MODE_CHANGE',
           color: result.config.color,
           duration: 5000,
+          brightness: this.ledService.getState().brightness,
         });
       }
       return;
@@ -177,6 +188,7 @@ export class ZenithGateway
       type: 'MODE_CHANGE',
       color: result.config.color,
       duration: 5000,
+      brightness: this.ledService.getState().brightness,
     });
   }
 

@@ -12,7 +12,7 @@ const PRESET_COLORS = [
 
 export function LedControl() {
   const navigate = useNavigate();
-  const { state, setManual, setAuto, turnOff } = useLed();
+  const { state, setManual, setAuto, turnOff, setBrightness } = useLed();
   
   // Yerel state'ler (slider sürüklerken anında tepki için)
   const [localColor, setLocalColor] = useState(state.color);
@@ -42,6 +42,8 @@ export function LedControl() {
     if (state.mode === 'manual') {
       if (!state.isOn && localBrightness === 0) return;
       setManual(localColor, localBrightness);
+    } else if (state.mode === 'auto') {
+      setBrightness(localBrightness);
     }
   };
 
@@ -127,7 +129,6 @@ export function LedControl() {
                   style={{
                     background: `linear-gradient(to right, #4B5563 ${((localBrightness) / 255) * 100}%, #1F2937 ${((localBrightness) / 255) * 100}%)`
                   }}
-                  disabled={state.mode === 'auto'}
                 />
                 <span style={{ fontSize: '20px' }}>🔆</span>
                 <span className="led-control__slider-val">{Math.round((localBrightness / 255) * 100)}%</span>

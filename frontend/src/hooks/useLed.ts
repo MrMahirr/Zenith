@@ -44,10 +44,15 @@ export function useLed() {
     socket.emit('led_off');
   };
 
+  const setBrightness = (brightness: number) => {
+    socket.emit('led_set_brightness', { brightness });
+  };
+
   return {
     state,
     setManual,
     setAuto,
     turnOff,
+    setBrightness,
   };
 }
