@@ -26,5 +26,10 @@ async function bootstrap() {
   console.log(`\n🚀 Zenith Backend çalışıyor: http://0.0.0.0:${port}`);
   console.log(`📡 WebSocket aktif: ws://localhost:${port}`);
   console.log(`📊 API endpoint'leri: http://localhost:${port}/api\n`);
+
+  // PM2'ye "hazırım" sinyali gönder – bağımlı servisler bu sinyali bekleyebilir
+  if (typeof process.send === 'function') {
+    process.send('ready');
+  }
 }
 bootstrap();
