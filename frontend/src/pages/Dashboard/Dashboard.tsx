@@ -61,7 +61,7 @@ export function Dashboard() {
       <header className="dashboard__header">
         <div className="dashboard__header-left" ref={menuRef} style={{ position: 'relative' }}>
           <div onClick={() => setIsMenuOpen(!isMenuOpen)} style={{ cursor: 'pointer' }}>
-            <ModeIndicator mode={mode} />
+            <ModeIndicator mode={mode} isOpen={isMenuOpen} />
           </div>
           {isMenuOpen && (
             <div className="dashboard__dropdown-menu glass-card">

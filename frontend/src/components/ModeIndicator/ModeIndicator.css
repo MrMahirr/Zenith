@@ -49,3 +49,19 @@
   0%, 100% { box-shadow: 0 0 12px var(--mode-glow); }
   50% { box-shadow: 0 0 32px var(--mode-glow), 0 0 60px var(--mode-glow); }
 }
+
+.mode-indicator__chevron {
+  font-size: 16px;
+  color: var(--text-muted);
+  margin-left: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: rotate(90deg); /* points right by default, wait, pointing down might be better. we will use 90deg to point down from › */
+}
+
+.mode-indicator__chevron--open {
+  transform: rotate(-90deg); /* points up when open */
+  color: var(--mode-color);
+}
