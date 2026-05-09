@@ -18,6 +18,7 @@ export interface PostureHistoryPoint {
   isSlouching: boolean;
   distance: number;
   sampleCount: number;
+  slouchPercentage: number;
 }
 
 interface PostureSummaryRow {
@@ -33,6 +34,7 @@ interface PostureHistoryRow {
   isSlouching: number;
   distance: number;
   sampleCount: number;
+  slouchPercentage: number;
 }
 
 interface PostureStatsRow {
@@ -138,6 +140,7 @@ export class PostureService implements OnModuleInit {
       isSlouching: Boolean(Number(row.isSlouching)),
       distance: Number(row.distance),
       sampleCount: Number(row.sampleCount),
+      slouchPercentage: Number(row.slouchPercentage ?? 0),
     }));
   }
 
@@ -252,6 +255,7 @@ export class PostureService implements OnModuleInit {
                 THEN 1
                 ELSE 0
               END AS isSlouching,
+              ROUND(SUM(CASE WHEN isSlouching = 1 THEN 1.0 ELSE 0.0 END) * 100.0 / COUNT(*), 1) AS slouchPercentage,
               ROUND(AVG(distance), 4) AS distance,
               COUNT(*) AS sampleCount
             FROM posture_events
@@ -283,6 +287,7 @@ export class PostureService implements OnModuleInit {
               THEN 1
               ELSE 0
             END AS isSlouching,
+            ROUND(SUM(source.slouchWeighted) * 100.0 / SUM(source.sampleCount), 1) AS slouchPercentage,
             ROUND(SUM(source.distanceWeighted) / SUM(source.sampleCount), 4) AS distance,
             SUM(source.sampleCount) AS sampleCount
           FROM (

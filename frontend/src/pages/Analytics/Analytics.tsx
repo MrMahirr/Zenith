@@ -154,6 +154,7 @@ export function Analytics() {
               minute: '2-digit',
             }),
             durum: d.isSlouching ? 1 : 0,
+            slouchPercentage: d.slouchPercentage ?? (d.isSlouching ? 100 : 0),
           })),
         );
 
@@ -191,6 +192,7 @@ export function Analytics() {
         const newPoint = {
           time: nowStr,
           durum: payload.isSlouching ? 1 : 0,
+          slouchPercentage: payload.isSlouching ? 100 : 0,
         };
         if (prev.length > 0 && prev[prev.length - 1].time === nowStr) {
           const updated = [...prev];
@@ -340,7 +342,10 @@ export function Analytics() {
                     borderRadius: '8px',
                     fontSize: '12px',
                   }}
-                  formatter={(value: any) => [value === 1 ? 'Kambur' : 'Duzgun', 'Durus']}
+                  formatter={(value: any, _name: any, props: any) => {
+                    const pct = props?.payload?.slouchPercentage ?? (value === 1 ? 100 : 0);
+                    return [`%${pct}`, 'Kambur Oranı'];
+                  }}
                 />
                 <Area type="stepAfter" dataKey="durum" stroke="#EF4444" fill="url(#postureGrad)" strokeWidth={2} />
               </AreaChart>
