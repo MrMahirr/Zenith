@@ -215,10 +215,27 @@ class PostureAnalyzer:
 
                 now = time.time()
                 if now - self.last_frame_emit_at >= CAMERA_FRAME_EMIT_INTERVAL:
+                    # RPi performansı için görüntüyü küçültelim ve sıkıştırma kalitesini ayarlayalım
+                    try:
+                        h, w = kare.shape[:2]
+                        target_width = 320
+                        if w > target_width:
+                            target_height = int(h * (target_width / w))
+                            kare_gonderim = cv2.resize(
+                                kare,
+                                (target_width, target_height),
+                                interpolation=cv2.INTER_NEAREST,
+                            )
+                        else:
+                            kare_gonderim = kare
+                    except Exception as resize_exc:
+                        print(f"[Kamera] Resize hatası, orijinal kare kullanılıyor: {resize_exc}")
+                        kare_gonderim = kare
+
                     ret, buffer = cv2.imencode(
                         ".jpg",
-                        kare,
-                        [cv2.IMWRITE_JPEG_QUALITY, 40],
+                        kare_gonderim,
+                        [cv2.IMWRITE_JPEG_QUALITY, 30],
                     )
                     if ret:
                         frame_b64 = base64.b64encode(buffer).decode("utf-8")
