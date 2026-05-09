@@ -102,6 +102,12 @@ function AnalyticsSkeleton() {
   );
 }
 
+const parseSqliteDate = (dateStr: string) => {
+  if (!dateStr) return new Date();
+  const cleanStr = dateStr.replace(' ', 'T');
+  return new Date(cleanStr.endsWith('Z') ? cleanStr : cleanStr + 'Z');
+};
+
 export function Analytics() {
   const navigate = useNavigate();
   const [sensorHistory, setSensorHistory] = useState<any[]>([]);
@@ -129,7 +135,7 @@ export function Analytics() {
 
         setSensorHistory(
           sensorData.map((d: any) => ({
-            time: new Date(d.createdAt).toLocaleTimeString('tr-TR', {
+            time: parseSqliteDate(d.createdAt).toLocaleTimeString('tr-TR', {
               hour: '2-digit',
               minute: '2-digit',
             }),
@@ -141,7 +147,7 @@ export function Analytics() {
 
         setPostureHistory(
           postureData.map((d: any) => ({
-            time: new Date(d.createdAt).toLocaleTimeString('tr-TR', {
+            time: parseSqliteDate(d.createdAt).toLocaleTimeString('tr-TR', {
               hour: '2-digit',
               minute: '2-digit',
             }),
