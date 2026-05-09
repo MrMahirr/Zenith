@@ -24,4 +24,11 @@ export class PostureController {
     const h = hours ? parseInt(hours, 10) : 24;
     return this.postureService.getStats(h);
   }
+
+  /** Kambur duruş loglarını döndür */
+  @Get('slouch-logs')
+  async getSlouchLogs(@Query('hours') hours?: string) {
+    const h = hours ? parseInt(hours, 10) : 24;
+    return this.postureService.getSlouchLogs(h);
+  }
 }

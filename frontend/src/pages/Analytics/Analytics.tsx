@@ -114,6 +114,8 @@ export function Analytics() {
   const socket = useSocket();
   const [sensorHistory, setSensorHistory] = useState<any[]>([]);
   const [postureHistory, setPostureHistory] = useState<any[]>([]);
+  const [slouchLogs, setSlouchLogs] = useState<any[]>([]);
+  const [postureView, setPostureView] = useState<'chart' | 'table'>('chart');
   const [postureStats, setPostureStats] = useState<any>(null);
   const [modeStats, setModeStats] = useState<any>(null);
   const [hours, setHours] = useState(24);
@@ -123,17 +125,19 @@ export function Analytics() {
     const fetchAll = async () => {
       setIsLoading(true);
       try {
-        const [sRes, pRes, psRes, mRes] = await Promise.all([
+        const [sRes, pRes, psRes, mRes, slRes] = await Promise.all([
           fetch(`${API_URL}/sensors/history?hours=${hours}`),
           fetch(`${API_URL}/posture/history?hours=${hours}`),
           fetch(`${API_URL}/posture/stats?hours=${hours}`),
           fetch(`${API_URL}/modes/stats?hours=${hours}`),
+          fetch(`${API_URL}/posture/slouch-logs?hours=${hours}`),
         ]);
 
         const sensorData = await sRes.json();
         const postureData = await pRes.json();
         const postureStatsData = await psRes.json();
         const modeStatsData = await mRes.json();
+        const slouchLogsData = await slRes.json();
 
         setSensorHistory(
           sensorData.map((d: any) => ({
@@ -159,6 +163,18 @@ export function Analytics() {
         );
 
         setPostureStats(postureStatsData);
+
+        setSlouchLogs(
+          slouchLogsData.map((d: any) => ({
+            id: d.id,
+            time: parseSqliteDate(d.createdAt).toLocaleTimeString('tr-TR', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            }),
+            distance: d.distance,
+          })),
+        );
 
         const pieData = Object.entries(modeStatsData)
           .filter(([_, value]) => (value as number) > 0)
@@ -214,6 +230,22 @@ export function Analytics() {
           goodPercentage: 100 - slouchPercentage,
         };
       });
+
+      if (payload.isSlouching) {
+        setSlouchLogs((prev) => {
+          const nowStrWithSeconds = new Date().toLocaleTimeString('tr-TR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          });
+          const newLog = {
+            id: Date.now(),
+            time: nowStrWithSeconds,
+            distance: payload.distance ?? 0,
+          };
+          return [newLog, ...prev].slice(0, 50);
+        });
+      }
     };
 
     socket.on('posture_update', handlePostureUpdate);
@@ -317,41 +349,88 @@ export function Analytics() {
         </div>
 
         <div className="analytics__card glass-card">
-          <h2 className="analytics__card-title">Durus Zaman Cizelgesi</h2>
-          {postureHistory.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={postureHistory}>
-                <defs>
-                  <linearGradient id="postureGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#EF4444" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="time" stroke="rgba(255,255,255,0.2)" fontSize={10} />
-                <YAxis
-                  stroke="rgba(255,255,255,0.2)"
-                  fontSize={10}
-                  ticks={[0, 1]}
-                  tickFormatter={(value) => (value === 1 ? 'Kambur' : 'Duzgun')}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: '#1a1f36',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                  }}
-                  formatter={(value: any, _name: any, props: any) => {
-                    const pct = props?.payload?.slouchPercentage ?? (value === 1 ? 100 : 0);
-                    return [`%${pct}`, 'Kambur Oranı'];
-                  }}
-                />
-                <Area type="stepAfter" dataKey="durum" stroke="#EF4444" fill="url(#postureGrad)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="analytics__card-header">
+            <h2 className="analytics__card-title">Durus Zaman Cizelgesi</h2>
+            <div className="analytics__card-tabs">
+              <button
+                className={`analytics__card-tab ${postureView === 'chart' ? 'analytics__card-tab--active' : ''}`}
+                onClick={() => setPostureView('chart')}
+                type="button"
+              >
+                Grafik
+              </button>
+              <button
+                className={`analytics__card-tab ${postureView === 'table' ? 'analytics__card-tab--active' : ''}`}
+                onClick={() => setPostureView('table')}
+                type="button"
+              >
+                Saniyelik Tablo
+              </button>
+            </div>
+          </div>
+          {postureView === 'chart' ? (
+            postureHistory.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={postureHistory}>
+                  <defs>
+                    <linearGradient id="postureGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#EF4444" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="time" stroke="rgba(255,255,255,0.2)" fontSize={10} />
+                  <YAxis
+                    stroke="rgba(255,255,255,0.2)"
+                    fontSize={10}
+                    ticks={[0, 1]}
+                    tickFormatter={(value) => (value === 1 ? 'Kambur' : 'Duzgun')}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: '#1a1f36',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                    }}
+                    formatter={(value: any, _name: any, props: any) => {
+                      const pct = props?.payload?.slouchPercentage ?? (value === 1 ? 100 : 0);
+                      return [`%${pct}`, 'Kambur Oranı'];
+                    }}
+                  />
+                  <Area type="stepAfter" dataKey="durum" stroke="#EF4444" fill="url(#postureGrad)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="analytics__empty">Henuz veri yok</div>
+            )
           ) : (
-            <div className="analytics__empty">Henuz veri yok</div>
+            <div className="analytics__table-container">
+              {slouchLogs.length > 0 ? (
+                <table className="analytics__table">
+                  <thead>
+                    <tr>
+                      <th>Zaman (Saniyelik)</th>
+                      <th>Mesafe (cm)</th>
+                      <th>Durum</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slouchLogs.map((log, idx) => (
+                      <tr key={log.id || idx}>
+                        <td className="mono" style={{ color: '#F87171' }}>{log.time}</td>
+                        <td className="mono">{log.distance ? `${(log.distance * 100).toFixed(1)} cm` : '0 cm'}</td>
+                        <td>
+                          <span className="analytics__badge-slouch">Kambur</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="analytics__empty">Kambur duruş tespiti bulunmuyor</div>
+              )}
+            </div>
           )}
         </div>
 

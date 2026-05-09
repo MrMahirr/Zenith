@@ -153,6 +153,27 @@ export class PostureService implements OnModuleInit {
     );
   }
 
+  /** Sadece kambur duruşları saniyelik detayda getiren log fonksiyonu */
+  async getSlouchLogs(hours = 24): Promise<any[]> {
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const rows = await this.dataSource.query(
+      `
+        SELECT id, isSlouching, distance, createdAt
+        FROM posture_events
+        WHERE isSlouching = 1 AND createdAt >= ?
+        ORDER BY createdAt DESC
+        LIMIT 100
+      `,
+      [this.toSqliteDateTime(since)],
+    );
+    return rows.map((row) => ({
+      id: Number(row.id),
+      isSlouching: Boolean(Number(row.isSlouching)),
+      distance: Number(row.distance),
+      createdAt: row.createdAt,
+    }));
+  }
+
   @Cron('0 30 * * * *') // Her saat yarısında çalışacak şekilde hafifletildi ve sensör temizliğinden ayrıştırıldı
   async handleRetentionCron() {
     await this.compactOldEvents('scheduled');
