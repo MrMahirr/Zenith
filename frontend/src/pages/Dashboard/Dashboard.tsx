@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock } from '../../components/Clock/Clock';
 import { ModeIndicator } from '../../components/ModeIndicator/ModeIndicator';
@@ -21,6 +22,18 @@ export function Dashboard() {
   const mode = useMode();
   const weather = useWeather();
   const navigate = useNavigate();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const getAirQualityStatus = (value: number | null) => {
     if (value === null) return '...';
@@ -46,8 +59,22 @@ export function Dashboard() {
 
       {/* ─── ÜST BAR ─── */}
       <header className="dashboard__header">
-        <div className="dashboard__header-left">
-          <ModeIndicator mode={mode} />
+        <div className="dashboard__header-left" ref={menuRef} style={{ position: 'relative' }}>
+          <div onClick={() => setIsMenuOpen(!isMenuOpen)} style={{ cursor: 'pointer' }}>
+            <ModeIndicator mode={mode} />
+          </div>
+          {isMenuOpen && (
+            <div className="dashboard__dropdown-menu glass-card">
+              <button className="dashboard__dropdown-item" onClick={() => navigate('/nfc')}>
+                <img src={nfcIcon} alt="NFC" className="dashboard__dropdown-icon" />
+                <span>NFC Kontrol</span>
+              </button>
+              <button className="dashboard__dropdown-item" onClick={() => navigate('/led')}>
+                <span className="dashboard__dropdown-icon" style={{ fontSize: '18px' }}>💡</span>
+                <span>LED Kontrol</span>
+              </button>
+            </div>
+          )}
         </div>
         <div className="dashboard__header-center">
           <PostureAlert posture={posture} />
@@ -94,28 +121,6 @@ export function Dashboard() {
             <img src={chartIcon} alt="İstatistik" className="dashboard__sensor-icon" />
           </span>
           <span className="dashboard__chart-btn-text">İstatistik</span>
-          <span className="dashboard__chart-btn-chevron">›</span>
-        </button>
-        <button
-          className="dashboard__chart-btn glass-card"
-          onClick={() => navigate('/nfc')}
-          id="nfc-btn"
-        >
-          <span className="dashboard__chart-btn-icon">
-            <img src={nfcIcon} alt="NFC" className="dashboard__sensor-icon" />
-          </span>
-          <span className="dashboard__chart-btn-text">NFC</span>
-          <span className="dashboard__chart-btn-chevron">›</span>
-        </button>
-        <button
-          className="dashboard__chart-btn glass-card"
-          onClick={() => navigate('/led')}
-          id="led-btn"
-        >
-          <span className="dashboard__chart-btn-icon">
-            <span style={{ fontSize: '18px' }}>💡</span>
-          </span>
-          <span className="dashboard__chart-btn-text">LED</span>
           <span className="dashboard__chart-btn-chevron">›</span>
         </button>
       </footer>
