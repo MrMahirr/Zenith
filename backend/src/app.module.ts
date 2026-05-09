@@ -21,6 +21,7 @@ import { ModeModule } from './mode/mode.module';
 import { WeatherModule } from './weather/weather.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { NfcModule } from './nfc/nfc.module';
+import { LedModule } from './led/led.module';
 
 @Module({
   controllers: [AppController],
@@ -56,6 +57,7 @@ import { NfcModule } from './nfc/nfc.module';
     WeatherModule,
     GatewayModule,
     NfcModule,
+    LedModule,
   ],
 })
 export class AppModule implements OnModuleInit {

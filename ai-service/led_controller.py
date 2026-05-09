@@ -90,8 +90,10 @@ class LEDController:
 
     def _handle_command(self, data):
         print(f"[LED] Komut alindi: {data}")
-        color = hex_to_color(data.get("color", "#000000"))
+        color_hex = data.get("color", "#000000")
+        color = hex_to_color(color_hex)
         duration = data.get("duration", 0)
+        brightness = data.get("brightness")
 
         self.target_color = color
 
@@ -100,9 +102,16 @@ class LEDController:
         else:
             self.animation_end_time = 0
 
-        self._set_color(self.target_color)
+        self._set_color(self.target_color, brightness)
+        
+        # Backend'e durum raporu gonder (istege bagli)
+        self.conn.emit("led_state_report", {
+            "color": color_hex,
+            "brightness": brightness if brightness is not None else LED_BRIGHTNESS,
+            "isOn": color_hex != "#000000" and color_hex != "#000"
+        })
 
-    def _set_color(self, color):
+    def _set_color(self, color, brightness=None):
         self.current_color = color
 
         if not self.has_hardware or self.strip is None:
@@ -110,6 +119,10 @@ class LEDController:
 
         with self._lock:
             try:
+                if brightness is not None:
+                    # RPi WS281x kutuphanesinde setBrightness mevcuttur
+                    self.strip.setBrightness(int(brightness))
+                    
                 for i in range(self.strip.numPixels()):
                     self.strip.setPixelColor(i, color)
                 self.strip.show()

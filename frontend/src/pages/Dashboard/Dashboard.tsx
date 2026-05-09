@@ -107,6 +107,17 @@ export function Dashboard() {
           <span className="dashboard__chart-btn-text">NFC</span>
           <span className="dashboard__chart-btn-chevron">›</span>
         </button>
+        <button
+          className="dashboard__chart-btn glass-card"
+          onClick={() => navigate('/led')}
+          id="led-btn"
+        >
+          <span className="dashboard__chart-btn-icon">
+            <span style={{ fontSize: '18px' }}>💡</span>
+          </span>
+          <span className="dashboard__chart-btn-text">LED</span>
+          <span className="dashboard__chart-btn-chevron">›</span>
+        </button>
       </footer>
     </div>
   );

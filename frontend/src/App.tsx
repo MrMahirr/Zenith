@@ -28,6 +28,12 @@ const Weather = lazy(() =>
   })),
 );
 
+const LedControl = lazy(() =>
+  import('./pages/LedControl/LedControl').then((module) => ({
+    default: module.LedControl,
+  })),
+);
+
 function RouteLoadingFallback() {
   return <div className="route-loading">Yukleniyor...</div>;
 }
@@ -43,6 +49,7 @@ function App() {
             <Route path="/camera" element={<Camera />} />
             <Route path="/nfc" element={<NfcManagement />} />
             <Route path="/weather" element={<Weather />} />
+            <Route path="/led" element={<LedControl />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

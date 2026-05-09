@@ -12,6 +12,7 @@ import { SensorService } from '../sensor/sensor.service';
 import { PostureService } from '../posture/posture.service';
 import { ModeService } from '../mode/mode.service';
 import { NfcService } from '../nfc/nfc.service';
+import { LedService } from '../led/led.service';
 
 @WebSocketGateway({
   cors: {
@@ -33,6 +34,7 @@ export class ZenithGateway
     private readonly postureService: PostureService,
     private readonly modeService: ModeService,
     private readonly nfcService: NfcService,
+    private readonly ledService: LedService,
   ) {}
 
   afterInit() {
@@ -89,6 +91,7 @@ export class ZenithGateway
     });
 
     if (
+      this.ledService.getState().mode === 'auto' &&
       this.postureLedModes.has(currentMode) &&
       previousStatus.isSlouching !== payload.kambur_mu
     ) {
@@ -98,6 +101,36 @@ export class ZenithGateway
         duration: payload.kambur_mu ? 0 : 2000,
       });
     }
+  }
+
+  @SubscribeMessage('led_manual')
+  handleLedManual(_client: Socket, payload: { color: string; brightness: number }) {
+    this.ledService.setManual(payload.color, payload.brightness);
+    this.server.emit('led_command', {
+      type: 'MANUAL',
+      color: payload.color,
+      brightness: payload.brightness,
+      duration: 0,
+    });
+    this.server.emit('led_state_sync', this.ledService.getState());
+  }
+
+  @SubscribeMessage('led_off')
+  handleLedOff() {
+    this.ledService.turnOff();
+    this.server.emit('led_command', { type: 'MANUAL', color: '#000000', brightness: 0, duration: 0 });
+    this.server.emit('led_state_sync', this.ledService.getState());
+  }
+
+  @SubscribeMessage('led_auto')
+  handleLedAuto() {
+    this.ledService.setAuto();
+    this.server.emit('led_state_sync', this.ledService.getState());
+  }
+
+  @SubscribeMessage('led_get_state')
+  handleLedGetState(client: Socket) {
+    client.emit('led_state_sync', this.ledService.getState());
   }
 
   @SubscribeMessage('nfc_chip_scanned')
