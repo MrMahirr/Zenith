@@ -27,9 +27,9 @@ module.exports = {
     {
       name: 'zenith-frontend',
       cwd: '/home/mahir/Zenith/frontend',
-      script: 'npm',
-      args: 'run serve',
-      interpreter: 'none',
+      script: './node_modules/serve/build/main.js',
+      args: '-s dist -l 4173 --no-clipboard',
+      interpreter: 'node',
       exec_mode: 'fork',
       autorestart: true,
       env: {
