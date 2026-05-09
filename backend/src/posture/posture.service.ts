@@ -85,7 +85,7 @@ export class PostureService implements OnModuleInit {
     });
 
     const status = data.kambur_mu ? 'SLOUCHING' : 'UPRIGHT';
-    this.logger.log(
+    this.logger.debug(
       `Posture cached: ${status} | Distance: ${data.mesafe.toFixed(3)} (Buffer size: ${this.writeBuffer.length}/${this.BATCH_SIZE})`,
     );
 
@@ -150,7 +150,7 @@ export class PostureService implements OnModuleInit {
     );
   }
 
-  @Cron('0 */15 * * * *')
+  @Cron('0 30 * * * *') // Her saat yarısında çalışacak şekilde hafifletildi ve sensör temizliğinden ayrıştırıldı
   async handleRetentionCron() {
     await this.compactOldEvents('scheduled');
   }

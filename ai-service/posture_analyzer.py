@@ -1,4 +1,6 @@
 import base64
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import socketserver
 import threading
 import time
 import urllib.request
@@ -15,6 +17,53 @@ from config import (
     POSTURE_THRESHOLD,
 )
 from connection_manager import ConnectionManager
+
+
+class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+    """Low-overhead multithreaded HTTP server to handle streaming requests."""
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+class MJPEGHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        # Disable logging requests to console for maximum performance and clean logs
+        pass
+
+    def do_GET(self):
+        if self.path == '/video_feed':
+            self.send_response(200)
+            self.send_header('Age', '0')
+            self.send_header('Cache-Control', 'no-cache, private')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=frame')
+            self.end_headers()
+            try:
+                last_sent_time = 0
+                while getattr(self.server, 'running', False):
+                    now = time.time()
+                    if now - last_sent_time < 0.066: # Max ~15 FPS
+                        time.sleep(0.01)
+                        continue
+
+                    jpg_bytes = self.server.analyzer.get_latest_frame()
+                    if jpg_bytes:
+                        self.wfile.write(b'--frame\r\n')
+                        self.send_header('Content-Type', 'image/jpeg')
+                        self.send_header('Content-Length', str(len(jpg_bytes)))
+                        self.end_headers()
+                        self.wfile.write(jpg_bytes)
+                        self.wfile.write(b'\r\n')
+                        last_sent_time = now
+                    else:
+                        time.sleep(0.05)
+            except (ConnectionResetError, BrokenPipeError):
+                pass
+            except Exception as e:
+                print(f"[Kamera Stream] Yayın hatası: {e}")
+        else:
+            self.send_response(404)
+            self.end_headers()
 
 
 class GecikmesizKamera:
@@ -115,6 +164,8 @@ class PostureAnalyzer:
 
         self.last_pose_landmarks = None
         self._frame_counter = 0
+        self.last_jpg_bytes = None
+        self.mjpeg_server = None
 
         self.mp_cizim = mp.solutions.drawing_utils
         self.mp_postur = mp.solutions.pose
@@ -134,7 +185,29 @@ class PostureAnalyzer:
         self.kamera_motoru = GecikmesizKamera(CAMERA_URL)
         self.thread = threading.Thread(target=self._process_frames, daemon=True)
         self.thread.start()
-        print("[Kamera] Postur analizi baslatildi...")
+
+        # RPi CPU/RAM yükünü sıfırlamak için yüksek performanslı MJPEG Stream Server'ı başlatalım
+        self._start_mjpeg_server()
+        print("[Kamera] Postur analizi ve MJPEG Stream sunucusu baslatildi...")
+
+    def _start_mjpeg_server(self):
+        def run_server():
+            port = 5001
+            try:
+                server = ThreadedHTTPServer(('0.0.0.0', port), MJPEGHandler)
+                server.analyzer = self
+                server.running = True
+                self.mjpeg_server = server
+                print(f"[Kamera Stream] MJPEG HTTP Yayini http://localhost:{port}/video_feed adresinde aktif.")
+                server.serve_forever()
+            except Exception as e:
+                print(f"[Kamera Stream] MJPEG Server baslatilamadi: {e}")
+
+        server_thread = threading.Thread(target=run_server, daemon=True)
+        server_thread.start()
+
+    def get_latest_frame(self):
+        return self.last_jpg_bytes
 
     def _should_emit_posture(self, slouching_detected):
         if self.is_currently_slouching is None:
@@ -228,23 +301,18 @@ class PostureAnalyzer:
                             self.mp_postur.POSE_CONNECTIONS,
                         )
 
-                now = time.time()
-                if now - self.last_frame_emit_at >= CAMERA_FRAME_EMIT_INTERVAL:
-                    # RPi performansı için görüntüyü küçültelim ve sıkıştırma kalitesini ayarlayalım
-                    try:
-                        h, w = kare.shape[:2]
-                        target_width = 320
-                        if w > target_width:
-                            target_height = int(h * (target_width / w))
-                            kare_gonderim = cv2.resize(
-                                kare,
-                                (target_width, target_height),
-                                interpolation=cv2.INTER_NEAREST,
-                            )
-                        else:
-                            kare_gonderim = kare
-                    except Exception as resize_exc:
-                        print(f"[Kamera] Resize hatası, orijinal kare kullanılıyor: {resize_exc}")
+                # RPi performansı için her kareyi 320px olarak tek bir kez sıkıştırıyoruz (MJPEG ve WS ortak kullanacak)
+                try:
+                    h, w = kare.shape[:2]
+                    target_width = 320
+                    if w > target_width:
+                        target_height = int(h * (target_width / w))
+                        kare_gonderim = cv2.resize(
+                            kare,
+                            (target_width, target_height),
+                            interpolation=cv2.INTER_NEAREST,
+                        )
+                    else:
                         kare_gonderim = kare
 
                     ret, buffer = cv2.imencode(
@@ -253,16 +321,28 @@ class PostureAnalyzer:
                         [cv2.IMWRITE_JPEG_QUALITY, 30],
                     )
                     if ret:
-                        frame_b64 = base64.b64encode(buffer).decode("utf-8")
-                        self.conn.emit("kamera_kare", frame_b64)
-                        self.last_frame_emit_at = now
+                        self.last_jpg_bytes = buffer.tobytes() # MJPEG burayı doğrudan kullanır (Sıfır ek CPU)
+                        
+                        # Direct MJPEG HTTP Stream sayesinde ağır base64 dönüşümleri ve Socket.io trafiği tamamen kaldırılmıştır.
+                        # RPi CPU, Bellek ve Ağ bant genişliği tasarrufu maksimuma çıkarıldı.
+                        pass
+                except Exception as stream_exc:
+                    print(f"[Kamera] Sıkıştırma hatası: {stream_exc}")
             except Exception as exc:
-                print(f"[Kamera Hata] Isleme hatasi: {exc}")
+                print(f"[Kamera Hata] İşleme hatası: {exc}")
 
             time.sleep(0.05)
 
     def stop(self):
         self.running = False
+        if self.mjpeg_server:
+            try:
+                self.mjpeg_server.running = False
+                self.mjpeg_server.shutdown()
+                self.mjpeg_server.server_close()
+                print("[Kamera Stream] MJPEG HTTP Yayını durduruldu.")
+            except Exception:
+                pass
 
         if hasattr(self, "thread") and self.thread.is_alive():
             self.thread.join(timeout=1.5)

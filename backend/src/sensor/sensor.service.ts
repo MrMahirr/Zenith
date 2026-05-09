@@ -101,7 +101,7 @@ export class SensorService implements OnModuleInit {
       createdAt: createdAtStr,
     });
 
-    this.logger.log(
+    this.logger.debug(
       `Sensor cached: ${data.temp}C | %${data.humidity} | ${data.pressure}hPa (Buffer size: ${this.writeBuffer.length}/${this.BATCH_SIZE})`,
     );
 
@@ -160,7 +160,7 @@ export class SensorService implements OnModuleInit {
     }));
   }
 
-  @Cron('0 */15 * * * *')
+  @Cron('0 0 * * * *') // Her saat başı çalışacak şekilde hafifletildi (15dk çok agresifti)
   async handleRetentionCron() {
     await this.compactOldReadings('scheduled');
   }

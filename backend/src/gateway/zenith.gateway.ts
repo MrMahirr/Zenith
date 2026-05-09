@@ -65,10 +65,8 @@ export class ZenithGateway
     this.server.emit('dashboard_sensor_data', payload);
   }
 
-  @SubscribeMessage('kamera_kare')
-  handleKameraKare(_client: Socket, frameB64: string) {
-    this.server.emit('camera_frame', frameB64);
-  }
+  // MJPEG Direkt Yayın (5001) mimarisine geçildiği için kamera_kare WS aktarımı kaldırılmıştır.
+  // Bu sayede NestJS backend işlemci ve RAM yükü dramatik şekilde sıfırlanmıştır.
 
   @SubscribeMessage('postur_durumu')
   async handlePostureDurumu(

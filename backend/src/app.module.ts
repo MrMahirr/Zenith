@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
+import { DataSource } from 'typeorm';
 
 // Entities
 import { SensorReading } from './database/entities/sensor-reading.entity';
@@ -42,7 +43,7 @@ import { NfcModule } from './nfc/nfc.module';
         SensorMinuteSummary,
         PostureMinuteSummary,
       ],
-      synchronize: true, // Geliştirme aşamasında – production'da migration kullanılacak
+      synchronize: false, // RPi performansı ve boot süresi için senkronizasyon devre dışı bırakıldı
     }),
 
     // Zamanlayıcı (hava durumu güncellemesi vb.)
@@ -57,4 +58,24 @@ import { NfcModule } from './nfc/nfc.module';
     NfcModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements OnModuleInit {
+  constructor(private readonly dataSource: DataSource) {}
+
+  async onModuleInit() {
+    try {
+      // SQLite performans pragmalarını uygulayarak okuma/yazma hızını katlıyoruz.
+      // 1. WAL (Write-Ahead Logging) modunu açarak eş zamanlı okuma/yazma sağlıyoruz.
+      await this.dataSource.query('PRAGMA journal_mode = WAL;');
+      // 2. synchronous = NORMAL ile her disk yazımında disk kafasının fiziksel beklemesini önlüyoruz (Crash risk minimal).
+      await this.dataSource.query('PRAGMA synchronous = NORMAL;');
+      // 3. Cache boyutunu 8MB yapıyoruz (Varsayılan 2MB idi).
+      await this.dataSource.query('PRAGMA cache_size = -8000;');
+      // 4. Memory-mapped I/O boyutunu 64MB yaparak doğrudan RAM eşleşmesi sağlıyoruz.
+      await this.dataSource.query('PRAGMA mmap_size = 67108864;');
+      // 5. Geçici tabloların disk yerine RAM üzerinde oluşturulmasını sağlıyoruz.
+      await this.dataSource.query('PRAGMA temp_store = MEMORY;');
+    } catch (err) {
+      console.error('[SQLite] Performans pragmaları uygulanamadı:', err);
+    }
+  }
+}

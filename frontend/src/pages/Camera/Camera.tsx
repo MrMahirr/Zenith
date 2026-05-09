@@ -8,18 +8,8 @@ export function Camera() {
   const navigate = useNavigate();
   const posture = usePosture();
   const socket = useSocket();
-  const [frame, setFrame] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleFrame = (b64: string) => {
-      setFrame(`data:image/jpeg;base64,${b64}`);
-    };
-
-    socket.on('camera_frame', handleFrame);
-    return () => {
-      socket.off('camera_frame', handleFrame);
-    };
-  }, [socket]);
+  const [streamActive, setStreamActive] = useState(false);
+  const streamUrl = `http://${window.location.hostname}:5001/video_feed`;
 
   const statusClass = !posture.isActive
     ? 'camera-page__status--inactive'
@@ -48,13 +38,15 @@ export function Camera() {
 
       <main className="camera-page__content">
         <div className="camera-page__feed glass-card">
-          {frame ? (
-            <img
-              src={frame}
-              alt="Kamera Canli Akis"
-              className="camera-page__video"
-            />
-          ) : (
+          <img
+            src={streamUrl}
+            alt="Kamera Canli Akis"
+            className="camera-page__video"
+            style={{ display: streamActive ? 'block' : 'none' }}
+            onLoad={() => setStreamActive(true)}
+            onError={() => setStreamActive(false)}
+          />
+          {!streamActive && (
             <div className="camera-page__placeholder">
               <span className="camera-page__placeholder-icon">[]</span>
               <p className="camera-page__placeholder-text">
