@@ -42,8 +42,6 @@ export class LedService {
   turnOff(): LedState {
     this.state = {
       ...this.state,
-      color: '#000000',
-      brightness: 0,
       isOn: false,
       mode: 'manual',
     };

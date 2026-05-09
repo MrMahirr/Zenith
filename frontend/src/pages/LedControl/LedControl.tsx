@@ -39,7 +39,8 @@ export function LedControl() {
   };
 
   const handleBrightnessChangeEnd = () => {
-    if (state.mode === 'manual' && state.isOn) {
+    if (state.mode === 'manual') {
+      if (!state.isOn && localBrightness === 0) return;
       setManual(localColor, localBrightness);
     }
   };
