@@ -225,7 +225,7 @@ export function Analytics() {
             Sicaklik & Nem
           </h2>
           {sensorHistory.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sensorHistory}>
                 <defs>
                   <linearGradient id="tempGrad" x1="0" y1="0" x2="0" y2="1">
@@ -267,7 +267,7 @@ export function Analytics() {
         <div className="analytics__card glass-card">
           <h2 className="analytics__card-title">Durus Zaman Cizelgesi</h2>
           {postureHistory.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={postureHistory}>
                 <defs>
                   <linearGradient id="postureGrad" x1="0" y1="0" x2="0" y2="1">
@@ -323,7 +323,7 @@ export function Analytics() {
         <div className="analytics__card analytics__card--small glass-card">
           <h2 className="analytics__card-title">Mod Kullanimi</h2>
           {modeStats ? (
-            <ResponsiveContainer width="100%" height={160}>
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={modeStats}
