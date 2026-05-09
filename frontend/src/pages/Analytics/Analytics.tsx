@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { useSocket } from '../../hooks/useSocket';
 import './Analytics.css';
 import temperatureIcon from '../../assets/icons/thermometer.png';
 
@@ -110,6 +111,7 @@ const parseSqliteDate = (dateStr: string) => {
 
 export function Analytics() {
   const navigate = useNavigate();
+  const socket = useSocket();
   const [sensorHistory, setSensorHistory] = useState<any[]>([]);
   const [postureHistory, setPostureHistory] = useState<any[]>([]);
   const [postureStats, setPostureStats] = useState<any>(null);
@@ -175,6 +177,48 @@ export function Analytics() {
 
     fetchAll();
   }, [hours]);
+
+  useEffect(() => {
+    const handlePostureUpdate = (payload: any) => {
+      if (!payload.isActive) return;
+      
+      const nowStr = new Date().toLocaleTimeString('tr-TR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      
+      setPostureHistory((prev) => {
+        const newPoint = {
+          time: nowStr,
+          durum: payload.isSlouching ? 1 : 0,
+        };
+        if (prev.length > 0 && prev[prev.length - 1].time === nowStr) {
+          const updated = [...prev];
+          updated[updated.length - 1] = newPoint;
+          return updated;
+        }
+        return [...prev, newPoint].slice(-100);
+      });
+
+      setPostureStats((prevStats: any) => {
+        if (!prevStats) return null;
+        const total = prevStats.totalEvents + 1;
+        const currentSlouchCount = Math.round((prevStats.slouchPercentage / 100) * prevStats.totalEvents);
+        const newSlouchCount = payload.isSlouching ? currentSlouchCount + 1 : currentSlouchCount;
+        const slouchPercentage = Math.round((newSlouchCount / total) * 100);
+        return {
+          totalEvents: total,
+          slouchPercentage,
+          goodPercentage: 100 - slouchPercentage,
+        };
+      });
+    };
+
+    socket.on('posture_update', handlePostureUpdate);
+    return () => {
+      socket.off('posture_update', handlePostureUpdate);
+    };
+  }, [socket]);
 
   if (isLoading) {
     return (
