@@ -1,13 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePosture } from '../../hooks/usePosture';
-import { useSocket } from '../../hooks/useSocket';
 import './Camera.css';
 
 export function Camera() {
   const navigate = useNavigate();
   const posture = usePosture();
-  const socket = useSocket();
   const [streamActive, setStreamActive] = useState(false);
   const streamUrl = `http://${window.location.hostname}:5001/video_feed`;
 

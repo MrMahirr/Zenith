@@ -5,7 +5,14 @@ export function useClock() {
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
+    const timer = setInterval(() => {
+      setTime((prev) => {
+        const now = new Date();
+        // Sadece saniye değiştiğinde state'i güncelleyerek gereksiz ara render tetiklenmelerini %100 önlüyoruz.
+        if (prev.getSeconds() === now.getSeconds()) return prev;
+        return now;
+      });
+    }, 250); // 250ms hassasiyeti ile kaymayı (drift) önler, ama saniyede yalnızca 1 kez state günceller.
     return () => clearInterval(timer);
   }, []);
 

@@ -4,6 +4,7 @@
   flex-direction: column;
   gap: 8px;
   animation: slide-up 0.5s ease backwards;
+  will-change: transform, opacity; /* Donanım hızlandırmalı giriş animasyonu */
   min-width: 0;
 }
 

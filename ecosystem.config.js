@@ -4,19 +4,22 @@ module.exports = {
       name: 'zenith-backend',
       cwd: '/home/mahir/Zenith/backend',
       script: 'node',
-      args: 'dist/main.js',
+      args: '--max-old-space-size=256 dist/main.js',
       interpreter: 'none',
       exec_mode: 'fork',
       autorestart: true,
       restart_delay: 2000,
       kill_timeout: 5000,
+      max_memory_restart: '300M',
     },
     {
       name: 'zenith-frontend',
       cwd: '/home/mahir/Zenith/frontend',
-      script: '/usr/bin/npm',
-      args: 'run serve:prod',
-      shell: true,
+      script: 'npx',
+      args: 'serve -s dist -l 4173 --no-clipboard',
+      interpreter: 'none',
+      exec_mode: 'fork',
+      autorestart: true,
       env: {
         NODE_ENV: 'production',
       },
@@ -30,6 +33,7 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       kill_timeout: 5000,
+      max_memory_restart: '400M',
       env: { DISPLAY: ':0' }
     },
     {
@@ -41,6 +45,7 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       kill_timeout: 5000,
+      max_memory_restart: '100M',
     }
   ],
 };

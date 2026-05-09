@@ -10,6 +10,7 @@ module.exports = {
       autorestart: true,
       restart_delay: 3000,
       kill_timeout: 5000,
+      max_memory_restart: '100M',
     },
     {
       name: 'zenith-nfc',
@@ -21,6 +22,7 @@ module.exports = {
       autorestart: true,
       restart_delay: 3000,
       kill_timeout: 5000,
+      max_memory_restart: '100M',
     },
   ],
 };

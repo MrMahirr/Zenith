@@ -97,6 +97,7 @@
   color: var(--text-primary);
   font-family: var(--font-primary);
   transition: all var(--transition-normal);
+  will-change: transform;
   position: relative;
   overflow: hidden;
 }

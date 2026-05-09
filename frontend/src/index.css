@@ -1,7 +1,46 @@
-/* ═══════════════════════════════════════════════════════
-   ZENITH DESIGN SYSTEM
-   Premium dark dashboard for 7" Raspberry Pi display
-   ═══════════════════════════════════════════════════════ */
+/* ─── Local Fonts (Offline & High Performance) ─── */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Inter-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/Inter-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/Inter-SemiBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/Inter-Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono-Bold.ttf') format('truetype');
+}
 
 /* ─── CSS Reset ─── */
 *, *::before, *::after {
@@ -115,12 +154,11 @@ html, body {
 
 /* ─── Glass Card Base ─── */
 .glass-card {
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(17, 24, 39, 0.85); /* RPi GPU dostu, yarı-saydam premium koyu arka plan (backdrop-filter kaldırıldı) */
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   transition: all var(--transition-normal);
+  will-change: transform, opacity, background-color, border-color; /* Donanım hızlandırmalı GPU render katmanı */
 }
 
 .glass-card:hover {
