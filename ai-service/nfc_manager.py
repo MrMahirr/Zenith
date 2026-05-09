@@ -14,6 +14,8 @@ class NFCManager:
         self.gpio = None
         self.has_hardware = False
         self.hardware_error = None
+        self._last_uid = None
+        self._last_uid_time = 0.0
 
     def _initialize_hardware(self):
         if self.reader is not None or self.hardware_error is not None:
@@ -58,14 +60,17 @@ class NFCManager:
             if self.has_hardware and self.reader is not None:
                 try:
                     card_id = self.reader.read_id()
-                    # Convert card_id to hex format for consistency (optional but recommended)
-                    # SimpleMFRC522 returns integer ID.
-                    uid_hex = hex(card_id)[2:].upper()
-                    # Add colons for MAC-like format (e.g., AA:BB:CC:DD)
-                    # MFRC522 typical ID length is 4 or 5 bytes
-                    # If it's a simple integer, we can just send it as a string
                     uid_str = str(card_id)
                     
+                    now = time.time()
+                    if uid_str == self._last_uid and now - self._last_uid_time < 10.0:
+                        # Son 10 saniye içinde okunan aynı kartı yoksay (cooldown)
+                        time.sleep(0.5)
+                        continue
+
+                    self._last_uid = uid_str
+                    self._last_uid_time = now
+
                     print(f"[NFC] Okunan Kart ID: {uid_str}")
                     
                     # Backend'e nfc_chip_scanned event'i gönder

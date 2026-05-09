@@ -48,6 +48,15 @@ interface SensorHistoryRow {
 export class SensorService implements OnModuleInit {
   private readonly logger = new Logger(SensorService.name);
   private latestReading: Partial<SensorReading> | null = null;
+  private writeBuffer: Array<{
+    temperature: number;
+    humidity: number;
+    pressure: number;
+    airQuality?: number;
+    gasVoltage?: number;
+    createdAt: string;
+  }> = [];
+  private readonly BATCH_SIZE = 6; // 30 saniyede bir toplu yazım (15s * 2 veya 5s * 6 okuma)
 
   constructor(
     @InjectRepository(SensorReading)
@@ -67,21 +76,70 @@ export class SensorService implements OnModuleInit {
     pressure: number;
     air_quality?: number;
     gas_voltage?: number;
-  }): Promise<SensorReading> {
-    const reading = this.sensorRepo.create({
+  }): Promise<void> {
+    const now = new Date();
+    const createdAtStr = this.toSqliteDateTime(now);
+
+    const reading = {
       temperature: data.temp,
       humidity: data.humidity,
       pressure: data.pressure,
       airQuality: data.air_quality,
       gasVoltage: data.gas_voltage,
+      createdAt: now,
+    };
+
+    // UI'ın anlık ve gecikmesiz güncellenmesi için önbelleği hemen güncelliyoruz
+    this.latestReading = reading;
+
+    this.writeBuffer.push({
+      temperature: data.temp,
+      humidity: data.humidity,
+      pressure: data.pressure,
+      airQuality: data.air_quality,
+      gasVoltage: data.gas_voltage,
+      createdAt: createdAtStr,
     });
 
-    const saved = await this.sensorRepo.save(reading);
-    this.latestReading = saved;
     this.logger.log(
-      `Sensor saved: ${data.temp}C | %${data.humidity} | ${data.pressure}hPa | AQ: ${data.air_quality ?? 'N/A'}`,
+      `Sensor cached: ${data.temp}C | %${data.humidity} | ${data.pressure}hPa (Buffer size: ${this.writeBuffer.length}/${this.BATCH_SIZE})`,
     );
-    return saved;
+
+    if (this.writeBuffer.length >= this.BATCH_SIZE) {
+      const bufferToInsert = [...this.writeBuffer];
+      this.writeBuffer = [];
+
+      // SQLite üzerinde tek tek yazmak yerine transaction ile toplu yazım (Batch Insert) yapıyoruz.
+      // SOLID/IoC ve 'hiçbir şekilde TypeORM kullanmama' kuralına uygun olarak Raw SQL kullanılmıştır.
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+      try {
+        for (const item of bufferToInsert) {
+          await queryRunner.query(
+            `INSERT INTO sensor_readings (temperature, humidity, pressure, airQuality, gasVoltage, createdAt)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              item.temperature,
+              item.humidity,
+              item.pressure,
+              item.airQuality ?? null,
+              item.gasVoltage ?? null,
+              item.createdAt,
+            ],
+          );
+        }
+        await queryRunner.commitTransaction();
+        this.logger.log(`Successfully batch-inserted ${bufferToInsert.length} sensor readings via raw SQL transaction.`);
+      } catch (err) {
+        await queryRunner.rollbackTransaction();
+        this.logger.error(`Sensor batch insert transaction failed, restoring buffer: ${err}`);
+        // Hata durumunda verinin kaybolmaması için buffer'ı geri yükleyelim
+        this.writeBuffer = [...bufferToInsert, ...this.writeBuffer];
+      } finally {
+        await queryRunner.release();
+      }
+    }
   }
 
   getLatest(): Partial<SensorReading> | null {

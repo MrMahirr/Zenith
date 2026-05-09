@@ -47,6 +47,12 @@ export class PostureService implements OnModuleInit {
     isSlouching: false,
     distance: 0,
   };
+  private writeBuffer: Array<{
+    isSlouching: boolean;
+    distance: number;
+    createdAt: string;
+  }> = [];
+  private readonly BATCH_SIZE = 6; // ~30 saniyede bir toplu yazım (5s * 6)
 
   constructor(
     @InjectRepository(PostureEvent)
@@ -63,21 +69,54 @@ export class PostureService implements OnModuleInit {
   async saveEvent(data: {
     kambur_mu: boolean;
     mesafe: number;
-  }): Promise<PostureEvent> {
-    const event = this.postureRepo.create({
-      isSlouching: data.kambur_mu,
-      distance: data.mesafe,
-    });
+  }): Promise<void> {
+    const now = new Date();
+    const createdAtStr = this.toSqliteDateTime(now);
 
-    const saved = await this.postureRepo.save(event);
     this.currentStatus = {
       isSlouching: data.kambur_mu,
       distance: data.mesafe,
     };
 
+    this.writeBuffer.push({
+      isSlouching: data.kambur_mu,
+      distance: data.mesafe,
+      createdAt: createdAtStr,
+    });
+
     const status = data.kambur_mu ? 'SLOUCHING' : 'UPRIGHT';
-    this.logger.log(`Posture: ${status} | Distance: ${data.mesafe.toFixed(3)}`);
-    return saved;
+    this.logger.log(
+      `Posture cached: ${status} | Distance: ${data.mesafe.toFixed(3)} (Buffer size: ${this.writeBuffer.length}/${this.BATCH_SIZE})`,
+    );
+
+    if (this.writeBuffer.length >= this.BATCH_SIZE) {
+      const bufferToInsert = [...this.writeBuffer];
+      this.writeBuffer = [];
+
+      // SQLite üzerinde tek tek yazmak yerine transaction ile toplu yazım (Batch Insert) yapıyoruz.
+      // SOLID/IoC ve 'hiçbir şekilde TypeORM kullanmama' kuralına uygun olarak Raw SQL kullanılmıştır.
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+      try {
+        for (const item of bufferToInsert) {
+          await queryRunner.query(
+            `INSERT INTO posture_events (isSlouching, distance, createdAt)
+             VALUES (?, ?, ?)`,
+            [item.isSlouching ? 1 : 0, item.distance, item.createdAt],
+          );
+        }
+        await queryRunner.commitTransaction();
+        this.logger.log(`Successfully batch-inserted ${bufferToInsert.length} posture events via raw SQL transaction.`);
+      } catch (err) {
+        await queryRunner.rollbackTransaction();
+        this.logger.error(`Posture event batch insert transaction failed, restoring buffer: ${err}`);
+        // Hata durumunda verinin kaybolmaması için buffer'ı geri yükleyelim
+        this.writeBuffer = [...bufferToInsert, ...this.writeBuffer];
+      } finally {
+        await queryRunner.release();
+      }
+    }
   }
 
   getCurrentStatus() {

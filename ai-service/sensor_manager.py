@@ -96,7 +96,7 @@ class SensorManager:
                 }
                 self.conn.emit('sensor_update', sensor_data)
 
-            time.sleep(5)
+            time.sleep(15)
 
     def stop(self):
         self.running = False
