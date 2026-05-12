@@ -67,7 +67,7 @@ class MJPEGHandler(BaseHTTPRequestHandler):
                 quality = 30
 
             # FPS'e göre minimum bekleme süresini hesapla
-            frame_delay = 1.0 / fps if fps > 0 else 0.066
+            frame_delay = 1.0 / fps if fps > 0 else 0.001
 
             self.send_response(200)
             self.send_header('Age', '0')

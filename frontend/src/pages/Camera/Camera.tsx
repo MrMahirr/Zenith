@@ -14,7 +14,15 @@ const RESOLUTION_OPTIONS = [
 ];
 
 // Standart Kare Hızı Seçenekleri
-const FPS_OPTIONS = [5, 10, 15, 20, 25, 30];
+const FPS_OPTIONS = [
+  { value: 5, label: '5' },
+  { value: 10, label: '10' },
+  { value: 15, label: '15' },
+  { value: 30, label: '30' },
+  { value: 60, label: '60' },
+  { value: 120, label: '120' },
+  { value: 0, label: 'Maks' },
+];
 
 // Standart Yayın Kalitesi Seçenekleri
 const QUALITY_OPTIONS = [15, 30, 50, 70, 90, 100];
@@ -167,14 +175,14 @@ export function Camera() {
             
             <span className="label mt-12">Kare Hizi (FPS)</span>
             <div className="camera-page__settings-buttons">
-              {FPS_OPTIONS.map((f) => (
+              {FPS_OPTIONS.map((opt) => (
                 <button 
-                  key={f}
-                  className={`settings-btn ${fps === f ? 'active' : ''}`}
-                  onClick={() => handleFpsChange(f)}
+                  key={opt.value}
+                  className={`settings-btn ${fps === opt.value ? 'active' : ''}`}
+                  onClick={() => handleFpsChange(opt.value)}
                   type="button"
                 >
-                  {f}
+                  {opt.label}
                 </button>
               ))}
             </div>
