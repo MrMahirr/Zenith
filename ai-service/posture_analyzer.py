@@ -81,9 +81,9 @@ class MJPEGHandler(BaseHTTPRequestHandler):
                         if raw_frame is not None:
                             try:
                                 h, w = raw_frame.shape[:2]
-                                if w > width:
+                                if w != width:
                                     height = int(h * (width / w))
-                                    frame_to_encode = cv2.resize(raw_frame, (width, height), interpolation=cv2.INTER_NEAREST)
+                                    frame_to_encode = cv2.resize(raw_frame, (width, height), interpolation=cv2.INTER_LINEAR)
                                 else:
                                     frame_to_encode = raw_frame
                                 
