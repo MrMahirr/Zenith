@@ -134,7 +134,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: 200px;
+  width: 240px;
 }
 
 .camera-page__info-card {
@@ -153,6 +153,55 @@
 .text-success { color: var(--color-success); }
 .text-muted { color: var(--text-secondary); }
 
+.camera-page__settings-card {
+  gap: 10px;
+}
+
+.camera-page__settings-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
+.settings-btn {
+  flex: 1;
+  min-width: 45px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  font-family: var(--font-primary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast) cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+}
+
+.settings-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.settings-btn.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  border-color: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
+}
+
+.settings-btn:active {
+  transform: scale(0.95);
+}
+
+.mt-12 {
+  margin-top: 12px;
+}
+
 @media (max-width: 768px) {
   .camera-page__content {
     flex-direction: column;
@@ -161,10 +210,12 @@
   .camera-page__info {
     width: 100%;
     flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .camera-page__info-card {
     flex: 1;
+    min-width: 200px;
   }
 }
 
@@ -174,3 +225,4 @@
   object-fit: cover;
   border-radius: 12px;
 }
+

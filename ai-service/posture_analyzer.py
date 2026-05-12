@@ -4,6 +4,7 @@ import socketserver
 import threading
 import time
 import urllib.request
+from urllib.parse import urlparse, parse_qs
 
 import cv2
 import mediapipe as mp
@@ -31,7 +32,22 @@ class MJPEGHandler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        if self.path == '/video_feed':
+        parsed_path = urlparse(self.path)
+        if parsed_path.path == '/video_feed':
+            # Parametreleri oku (Varsayılan değerler: 320px, 15fps, 30 kalite)
+            query = parse_qs(parsed_path.query)
+            try:
+                width = int(query.get('width', [320])[0])
+                fps = int(query.get('fps', [15])[0])
+                quality = int(query.get('quality', [30])[0])
+            except ValueError:
+                width = 320
+                fps = 15
+                quality = 30
+
+            # FPS'e göre minimum bekleme süresini hesapla
+            frame_delay = 1.0 / fps if fps > 0 else 0.066
+
             self.send_response(200)
             self.send_header('Age', '0')
             self.send_header('Cache-Control', 'no-cache, private')
@@ -42,11 +58,32 @@ class MJPEGHandler(BaseHTTPRequestHandler):
                 last_sent_time = 0
                 while getattr(self.server, 'running', False):
                     now = time.time()
-                    if now - last_sent_time < 0.066: # Max ~15 FPS
-                        time.sleep(0.01)
+                    if now - last_sent_time < frame_delay:
+                        time.sleep(0.005)
                         continue
 
-                    jpg_bytes = self.server.analyzer.get_latest_frame()
+                    # Eğer özel bir çözünürlük veya kalite istenmişse raw_frame üzerinden anlık sıkıştırıyoruz
+                    if width != 320 or quality != 30:
+                        raw_frame = self.server.analyzer.get_latest_raw_frame()
+                        if raw_frame is not None:
+                            try:
+                                h, w = raw_frame.shape[:2]
+                                if w > width:
+                                    height = int(h * (width / w))
+                                    frame_to_encode = cv2.resize(raw_frame, (width, height), interpolation=cv2.INTER_NEAREST)
+                                else:
+                                    frame_to_encode = raw_frame
+                                
+                                ret, buffer = cv2.imencode('.jpg', frame_to_encode, [cv2.IMWRITE_JPEG_QUALITY, quality])
+                                jpg_bytes = buffer.tobytes() if ret else None
+                            except Exception:
+                                jpg_bytes = self.server.analyzer.get_latest_frame()
+                        else:
+                            jpg_bytes = self.server.analyzer.get_latest_frame()
+                    else:
+                        # Varsayılan değerler için önceden sıkıştırılmış (sıfır ek CPU) kareyi gönderiyoruz
+                        jpg_bytes = self.server.analyzer.get_latest_frame()
+
                     if jpg_bytes:
                         self.wfile.write(b'--frame\r\n')
                         self.send_header('Content-Type', 'image/jpeg')
@@ -56,7 +93,7 @@ class MJPEGHandler(BaseHTTPRequestHandler):
                         self.wfile.write(b'\r\n')
                         last_sent_time = now
                     else:
-                        time.sleep(0.05)
+                        time.sleep(0.02)
             except (ConnectionResetError, BrokenPipeError):
                 pass
             except Exception as e:
@@ -209,6 +246,9 @@ class PostureAnalyzer:
     def get_latest_frame(self):
         return self.last_jpg_bytes
 
+    def get_latest_raw_frame(self):
+        return getattr(self, 'last_raw_frame', None)
+
     def _should_emit_posture(self, slouching_detected):
         if self.is_currently_slouching is None:
             return True
@@ -322,6 +362,7 @@ class PostureAnalyzer:
                     )
                     if ret:
                         self.last_jpg_bytes = buffer.tobytes() # MJPEG burayı doğrudan kullanır (Sıfır ek CPU)
+                        self.last_raw_frame = kare.copy()
                         
                         # Direct MJPEG HTTP Stream sayesinde ağır base64 dönüşümleri ve Socket.io trafiği tamamen kaldırılmıştır.
                         # RPi CPU, Bellek ve Ağ bant genişliği tasarrufu maksimuma çıkarıldı.
