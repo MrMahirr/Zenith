@@ -31,6 +31,13 @@ class MJPEGHandler(BaseHTTPRequestHandler):
         # Disable logging requests to console for maximum performance and clean logs
         pass
 
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', '*')
+        self.end_headers()
+
     def do_GET(self):
         parsed_path = urlparse(self.path)
         if parsed_path.path == '/camera_info':
@@ -66,6 +73,7 @@ class MJPEGHandler(BaseHTTPRequestHandler):
             self.send_header('Cache-Control', 'no-cache, private')
             self.send_header('Pragma', 'no-cache')
             self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=frame')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             try:
                 last_sent_time = 0
@@ -113,6 +121,7 @@ class MJPEGHandler(BaseHTTPRequestHandler):
                 print(f"[Kamera Stream] Yayın hatası: {e}")
         else:
             self.send_response(404)
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
 
 
