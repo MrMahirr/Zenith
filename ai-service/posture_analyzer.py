@@ -40,6 +40,7 @@ class MJPEGHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed_path = urlparse(self.path)
+        print(f"[Kamera Debug] Gelen istek: {self.path} | Parsed Path: {parsed_path.path}")
         if parsed_path.path == '/camera_info':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
