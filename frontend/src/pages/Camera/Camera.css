@@ -157,6 +157,26 @@
   gap: 10px;
 }
 
+.camera-page__settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.camera-page__native-badge {
+  font-size: 9px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #60a5fa;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
 .camera-page__settings-buttons {
   display: flex;
   flex-wrap: wrap;

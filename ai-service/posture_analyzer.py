@@ -33,7 +33,20 @@ class MJPEGHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed_path = urlparse(self.path)
-        if parsed_path.path == '/video_feed':
+        if parsed_path.path == '/camera_info':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            width = getattr(self.server.analyzer, 'native_width', 320)
+            height = getattr(self.server.analyzer, 'native_height', 240)
+            
+            response = f'{{"width": {width}, "height": {height}}}'
+            self.wfile.write(response.encode('utf-8'))
+            return
+
+        elif parsed_path.path == '/video_feed':
             # Parametreleri oku (Varsayılan değerler: 320px, 15fps, 30 kalite)
             query = parse_qs(parsed_path.query)
             try:
@@ -198,6 +211,8 @@ class PostureAnalyzer:
         self.last_frame_emit_at = 0.0
         self.last_posture_emit_at = 0.0
         self.last_distance = 0.0
+        self.native_width = 320
+        self.native_height = 240
 
         self.last_pose_landmarks = None
         self._frame_counter = 0
@@ -292,6 +307,11 @@ class PostureAnalyzer:
                 if not basarili or kare is None or kare.size == 0:
                     time.sleep(0.1)
                     continue
+
+                # Yerel çözünürlüğü tespit et ve kaydet
+                h, w = kare.shape[:2]
+                self.native_width = w
+                self.native_height = h
 
                 if self.analysis_enabled:
                     # Sadece her 3 karede bir MediaPipe analizi yaparak CPU yükünü azaltalım

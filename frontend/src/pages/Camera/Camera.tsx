@@ -3,10 +3,53 @@ import { useNavigate } from 'react-router-dom';
 import { usePosture } from '../../hooks/usePosture';
 import './Camera.css';
 
+interface Preset {
+  value: number;
+  label: string;
+}
+
+// Kameranın yerel çözünürlüğüne göre orantılı akıllı presetler üreten yardımcı fonksiyon
+const getResolutionPresets = (nativeW: number): Preset[] => {
+  if (nativeW <= 640) {
+    return [
+      { value: 240, label: '240p' },
+      { value: 320, label: '320p' },
+      { value: nativeW, label: `${nativeW}p` },
+    ];
+  }
+  if (nativeW <= 1280) {
+    return [
+      { value: 360, label: '360p' },
+      { value: 540, label: '540p' },
+      { value: nativeW, label: '720p' },
+    ];
+  }
+  if (nativeW <= 1920) {
+    return [
+      { value: 360, label: '360p' },
+      { value: 540, label: '540p' },
+      { value: 720, label: '720p' },
+      { value: nativeW, label: '1080p' },
+    ];
+  }
+  // 2K ve daha yüksek çözünürlükler için
+  return [
+    { value: 480, label: '480p' },
+    { value: 720, label: '720p' },
+    { value: 1080, label: '1080p' },
+    { value: nativeW, label: 'Orijinal (2K+)' },
+  ];
+};
+
 export function Camera() {
   const navigate = useNavigate();
   const posture = usePosture();
   const [streamActive, setStreamActive] = useState(false);
+
+  // Kameranın yerel fiziksel çözünürlük state'leri
+  const [nativeWidth, setNativeWidth] = useState<number>(320);
+  const [nativeHeight, setNativeHeight] = useState<number>(240);
+  const [hasLoadedNative, setHasLoadedNative] = useState<boolean>(false);
 
   // Yerel depolama desteğiyle ayar durumları
   const [width, setWidth] = useState<number>(() => {
@@ -21,6 +64,33 @@ export function Camera() {
     const saved = localStorage.getItem('camera_quality');
     return saved ? parseInt(saved, 10) : 30;
   });
+
+  // Kameranın gerçek çözünürlüğünü otomatik algıla
+  useEffect(() => {
+    fetch(`http://${window.location.hostname}:5001/camera_info`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.width && data.height) {
+          setNativeWidth(data.width);
+          setNativeHeight(data.height);
+          setHasLoadedNative(true);
+
+          // Eğer depolanmış bir genişlik yoksa veya depolanan genişlik kameranın güncel
+          // çözünürlüğü ile uyumsuz ise orta seviye orantılı bir varsayılan seçelim.
+          const saved = localStorage.getItem('camera_width');
+          const presets = getResolutionPresets(data.width);
+          const matched = presets.some(p => p.value === Number(saved));
+
+          if (!saved || !matched) {
+            const midIndex = Math.floor(presets.length / 2);
+            const defaultVal = presets[midIndex].value;
+            setWidth(defaultVal);
+            localStorage.setItem('camera_width', String(defaultVal));
+          }
+        }
+      })
+      .catch((err) => console.error('Kamera yerel çözünürlük bilgisi alınamadı:', err));
+  }, []);
 
   const handleWidthChange = (w: number) => {
     setWidth(w);
@@ -56,6 +126,9 @@ export function Camera() {
     : posture.isSlouching
       ? 'text-danger'
       : 'text-success';
+
+  // Mevcut çözünürlük presetleri listesi
+  const resolutionPresets = getResolutionPresets(nativeWidth);
 
   return (
     <div className="camera-page">
@@ -108,29 +181,26 @@ export function Camera() {
           </div>
 
           <div className="camera-page__info-card glass-card camera-page__settings-card">
-            <span className="label">Yayin Cozunurlugu</span>
+            <div className="camera-page__settings-header">
+              <span className="label">Yayin Cozunurlugu</span>
+              {hasLoadedNative && (
+                <span className="camera-page__native-badge">
+                  Yerel: {nativeWidth}x{nativeHeight}
+                </span>
+              )}
+            </div>
+            
             <div className="camera-page__settings-buttons">
-              <button 
-                className={`settings-btn ${width === 240 ? 'active' : ''}`}
-                onClick={() => handleWidthChange(240)}
-                type="button"
-              >
-                240p
-              </button>
-              <button 
-                className={`settings-btn ${width === 320 ? 'active' : ''}`}
-                onClick={() => handleWidthChange(320)}
-                type="button"
-              >
-                320p
-              </button>
-              <button 
-                className={`settings-btn ${width === 480 ? 'active' : ''}`}
-                onClick={() => handleWidthChange(480)}
-                type="button"
-              >
-                480p
-              </button>
+              {resolutionPresets.map((preset) => (
+                <button 
+                  key={preset.value}
+                  className={`settings-btn ${width === preset.value ? 'active' : ''}`}
+                  onClick={() => handleWidthChange(preset.value)}
+                  type="button"
+                >
+                  {preset.label}
+                </button>
+              ))}
             </div>
             
             <span className="label mt-12">Kare Hizi (FPS)</span>
@@ -166,4 +236,3 @@ export function Camera() {
     </div>
   );
 }
-
