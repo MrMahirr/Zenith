@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { ModeChange } from '../database/entities/mode-change.entity';
 
 /** Mod tanımları ve LED renk eşleştirmeleri */
@@ -20,9 +19,13 @@ export class ModeService {
   private currentMode: ModeName = 'PASSIVE';
 
   constructor(
-    @InjectRepository(ModeChange)
-    private readonly modeRepo: Repository<ModeChange>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  /** SQLite için tutarlı tarih-saat formatı (YYYY-MM-DD HH:MM:SS) */
+  private toSqliteDateTime(value: Date): string {
+    return value.toISOString().slice(0, 19).replace('T', ' ');
+  }
 
   /** Modu değiştir ve DB'ye kaydet */
   async changeMode(newMode: string): Promise<{ mode: ModeName; config: (typeof MODE_CONFIG)[ModeName] } | null> {
@@ -35,9 +38,13 @@ export class ModeService {
     const validMode = newMode as ModeName;
     this.currentMode = validMode;
 
-    // DB'ye kaydet
-    const change = this.modeRepo.create({ mode: validMode });
-    await this.modeRepo.save(change);
+    const createdAt = this.toSqliteDateTime(new Date());
+
+    // SOLID/IoC ve 'hiçbir şekilde TypeORM kullanmama' kuralına uygun olarak Raw SQL kullanılmıştır.
+    await this.dataSource.query(
+      `INSERT INTO mode_changes (mode, createdAt) VALUES (?, ?)`,
+      [validMode, createdAt]
+    );
 
     this.logger.log(`Mod değiştirildi: ${MODE_CONFIG[validMode].name}`);
     return { mode: validMode, config: MODE_CONFIG[validMode] };
@@ -53,26 +60,38 @@ export class ModeService {
 
   /** Mod değişim geçmişini getir */
   async getHistory(hours: number = 24): Promise<ModeChange[]> {
-    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    return this.modeRepo.find({
-      where: { createdAt: MoreThanOrEqual(since) },
-      order: { createdAt: 'ASC' },
-    });
+    const since = this.toSqliteDateTime(new Date(Date.now() - hours * 60 * 60 * 1000));
+    
+    // SOLID/IoC ve 'hiçbir şekilde TypeORM kullanmama' kuralına uygun olarak Raw SQL kullanılmıştır.
+    const rows = await this.dataSource.query(
+      `SELECT id, mode, createdAt FROM mode_changes WHERE createdAt >= ? ORDER BY createdAt ASC`,
+      [since]
+    );
+
+    return rows;
   }
 
   /** Mod kullanım istatistikleri (pie chart için) */
-  async getUsageStats(hours: number = 24) {
-    const stats: Record<string, number> = {};
-    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    const rows = await this.modeRepo
-      .createQueryBuilder('mode_change')
-      .select('mode_change.mode', 'mode')
-      .addSelect('COUNT(*)', 'count')
-      .where('mode_change.createdAt >= :since', { since })
-      .groupBy('mode_change.mode')
-      .getRawMany<{ mode: string; count: string }>();
+  async getUsageStats(hours: number = 24): Promise<Record<string, number>> {
+    const stats: Record<string, number> = {
+      PASSIVE: 0,
+      CODING: 0,
+      FOCUS: 0,
+      RELAX: 0,
+      MEETING: 0,
+    };
+    
+    const since = this.toSqliteDateTime(new Date(Date.now() - hours * 60 * 60 * 1000));
 
-    const rowMap = new Map(rows.map((row) => [row.mode, Number(row.count)]));
+    // SOLID/IoC ve 'hiçbir şekilde TypeORM kullanmama' kuralına uygun olarak Raw SQL kullanılmıştır.
+    const rows = await this.dataSource.query(
+      `SELECT mode, COUNT(*) as count FROM mode_changes WHERE createdAt >= ? GROUP BY mode`,
+      [since]
+    );
+
+    const rowMap = new Map<string, number>(
+      rows.map((row: any) => [String(row.mode), Number(row.count)])
+    );
 
     for (const key of Object.keys(MODE_CONFIG)) {
       stats[key] = rowMap.get(key) ?? 0;
@@ -81,3 +100,4 @@ export class ModeService {
     return stats;
   }
 }
+
