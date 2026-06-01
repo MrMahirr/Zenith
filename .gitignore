@@ -1,4 +1,4 @@
-iabu dosyayı git# OS / editor
+# OS / editor
 .DS_Store
 Thumbs.db
 .idea/
@@ -49,3 +49,7 @@ core.*
 
 # Local installers
 ai-service/Miniforge3-Linux-aarch64.sh
+
+# Database
+*.sqlite
+*.sqlite-journal
