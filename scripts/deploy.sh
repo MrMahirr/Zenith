@@ -185,11 +185,32 @@ install_dependencies() {
   fi
 }
 
+# run_suite <ad> <klasör> <komut...>: çıktıyı dosyaya alır; yalnızca başarısız
+# olursa son satırları gösterir.
+run_suite() {
+  local name="$1" dir="$2"; shift 2
+  local logfile="$STATE_DIR/test-$name.log"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '    [dry-run] (%s) %s
+' "$name" "$*"
+    return 0
+  fi
+
+  mkdir -p "$STATE_DIR"
+  if (cd "$dir" && "$@") > "$logfile" 2>&1; then
+    echo "    $name: geçti ($(grep -Eo 'Ran [0-9]+ tests?|Tests: +[0-9]+ passed' "$logfile" | head -1))"
+  else
+    tail -n 40 "$logfile" >&2
+    die "$name testleri başarısız (tam çıktı: $logfile)"
+  fi
+}
+
 run_tests() {
   [ "$RUN_TESTS" -eq 1 ] || { warn "testler atlandı (--skip-tests)"; return 0; }
   log "Testler"
-  (cd "$ROOT/ai-service" && run "$PYTHON" -m unittest discover)
-  (cd "$ROOT/backend" && run npm test --silent)
+  run_suite ai-service "$ROOT/ai-service" "$PYTHON" -m unittest discover
+  run_suite backend "$ROOT/backend" npm test --silent
 }
 
 build_all() {
