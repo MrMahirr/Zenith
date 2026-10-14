@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { API_URL } from '../config';
 import { useSocket } from './useSocket';
-
-const API_URL = `http://${window.location.hostname}:3000/api`;
 
 export type CameraConnectionStatus = 'unknown' | 'connected' | 'disconnected';
 

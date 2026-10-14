@@ -106,6 +106,23 @@ class SensorManagerTests(unittest.TestCase):
         self.assertEqual(hardware.open_calls, 3)
         self.assertTrue(manager.conn.emitted)
 
+    def test_live_interval_setting_is_applied_and_validated(self):
+        manager = sensor_manager.SensorManager(hardware=ScriptedHardware([]))
+        default = manager._read_interval
+
+        manager._handle_settings({"sensorIntervalSeconds": 60})
+        self.assertEqual(manager._read_interval, 60.0)
+
+        manager._handle_settings({"sensorIntervalSeconds": 1})      # aralik disi
+        self.assertEqual(manager._read_interval, default)
+
+        manager._handle_settings({"sensorIntervalSeconds": 30})
+        manager._handle_settings({"sensorIntervalSeconds": None})   # tercih kaldirildi
+        self.assertEqual(manager._read_interval, default)
+
+        manager._handle_settings("garbage")                         # bozuk yuk
+        self.assertEqual(manager._read_interval, default)
+
     def test_voltage_to_air_quality_scale(self):
         self.assertEqual(sensor_manager.voltage_to_air_quality(0.0), 0.0)
         self.assertEqual(sensor_manager.voltage_to_air_quality(2.5), 50.0)

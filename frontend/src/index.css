@@ -200,3 +200,53 @@ html, body {
 .mono {
   font-family: var(--font-mono);
 }
+
+/* ─── Paylaşılan küçük seçenek düğmesi (Kamera, Ayarlar) ─── */
+.settings-btn {
+  flex: 1;
+  min-width: 45px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  font-family: var(--font-primary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast) cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+}
+
+.settings-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.settings-btn.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  border-color: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
+}
+
+.settings-btn:active {
+  transform: scale(0.95);
+}
+
+/* ─── Dokunmatik ekran: parmakla rahat basılabilen hedefler (≥44px) ─── */
+@media (pointer: coarse) {
+  .settings-btn,
+  .analytics__filter-btn,
+  .analytics__back,
+  .camera-page__back,
+  .led-control__back,
+  .led-control__mode-btn,
+  .settings__back,
+  .nfc-chip-card__btn,
+  .dashboard__dropdown-item {
+    min-height: 44px;
+  }
+}

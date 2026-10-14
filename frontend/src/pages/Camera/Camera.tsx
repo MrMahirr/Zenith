@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePosture } from '../../hooks/usePosture';
+import { STREAM_URL } from '../../config';
 import { CameraAddressCard } from './components/CameraAddressCard';
 import './Camera.css';
 
@@ -54,7 +55,7 @@ export function Camera() {
 
   // Kameranın gerçek çözünürlüğünü otomatik algıla ve kullanıcıyı bilgilendir
   useEffect(() => {
-    fetch(`http://${window.location.hostname}:5001/camera_info`)
+    fetch(`${STREAM_URL}/camera_info`)
       .then((res) => res.json())
       .then((data) => {
         if (data.width && data.height) {
@@ -66,28 +67,27 @@ export function Camera() {
       .catch((err) => console.error('Kamera yerel çözünürlük bilgisi alınamadı:', err));
   }, []);
 
+  // Ayar değişince yayın yeniden yüklenir; yükleme göstergesi olay işleyicilerinde açılır.
   const handleWidthChange = (w: number) => {
+    setStreamActive(false);
     setWidth(w);
     localStorage.setItem('camera_width', String(w));
   };
 
   const handleFpsChange = (f: number) => {
+    setStreamActive(false);
     setFps(f);
     localStorage.setItem('camera_fps', String(f));
   };
 
   const handleQualityChange = (q: number) => {
+    setStreamActive(false);
     setQuality(q);
     localStorage.setItem('camera_quality', String(q));
   };
 
-  // Ayarlar değiştiğinde yükleniyor animasyonunu geçici olarak tekrar tetikleyerek akıcılığı koruyalım
-  useEffect(() => {
-    setStreamActive(false);
-  }, [width, fps, quality]);
-
   // Dinamik parametreli yayın adresi
-  const streamUrl = `http://${window.location.hostname}:5001/video_feed?width=${width}&fps=${fps}&quality=${quality}`;
+  const streamUrl = `${STREAM_URL}/video_feed?width=${width}&fps=${fps}&quality=${quality}`;
 
   const statusClass = !posture.isActive
     ? 'camera-page__status--inactive'

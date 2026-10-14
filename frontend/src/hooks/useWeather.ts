@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = `${window.location.protocol}//${window.location.hostname}:3000/api`;
+import { API_URL } from '../config';
 
 export interface WeatherData {
   city: string;

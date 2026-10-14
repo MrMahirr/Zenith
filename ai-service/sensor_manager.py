@@ -12,6 +12,7 @@ from config import (
     SIMULATE_HARDWARE,
 )
 from connection_manager import ConnectionManager
+from runtime_settings import SENSOR_INTERVAL_RANGE, coerce_number
 
 log = logging.getLogger("zenith.sensor")
 
@@ -126,6 +127,23 @@ class SensorManager:
 
         self._dead_signal_logged = False
         self._last_open_error = None
+        # Panelden degistirilebilir; baslangicta .env degeri gecerlidir.
+        self._read_interval = SENSOR_READ_INTERVAL
+
+        self.conn.on("settings_changed", self._handle_settings)
+        self.conn.on_connect(self._subscribe_settings)
+
+    def _subscribe_settings(self):
+        self.conn.emit("settings_subscribe")
+
+    def _handle_settings(self, payload):
+        """Panelden degistirilen okuma araligini uygular (null = .env degeri)."""
+        raw = payload.get("sensorIntervalSeconds") if isinstance(payload, dict) else None
+        interval = coerce_number(raw, SENSOR_READ_INTERVAL, SENSOR_INTERVAL_RANGE)
+
+        if interval != self._read_interval:
+            self._read_interval = interval
+            log.info("Okuma araligi guncellendi: %.0f sn", interval)
 
     def start(self):
         self._stop_event.clear()
@@ -168,7 +186,7 @@ class SensorManager:
                 self._warn_if_gas_signal_dead(reading["gas_voltage"])
                 self.conn.emit("sensor_update", reading)
 
-            self._stop_event.wait(SENSOR_READ_INTERVAL)
+            self._stop_event.wait(self._read_interval)
 
     def _try_open(self):
         try:

@@ -1,10 +1,10 @@
 /** Mod tanımları ve LED renk eşleştirmeleri (tek kaynak). */
 export const MODE_CONFIG = {
-  PASSIVE: { name: 'Serbest', color: '#94A3B8' },
-  CODING: { name: 'Kodlama Modu', color: '#10B981' },
-  FOCUS: { name: 'Odak Modu', color: '#3B82F6' },
-  RELAX: { name: 'Relax Modu', color: '#F59E0B' },
-  MEETING: { name: 'Toplantı Modu', color: '#EF4444' },
+  PASSIVE: { name: 'Serbest', label: 'Serbest', color: '#94A3B8' },
+  CODING: { name: 'Kodlama Modu', label: 'Kodlama', color: '#10B981' },
+  FOCUS: { name: 'Odak Modu', label: 'Odak', color: '#3B82F6' },
+  RELAX: { name: 'Relax Modu', label: 'Relax', color: '#F59E0B' },
+  MEETING: { name: 'Toplantı Modu', label: 'Toplantı', color: '#EF4444' },
 } as const;
 
 export type ModeName = keyof typeof MODE_CONFIG;

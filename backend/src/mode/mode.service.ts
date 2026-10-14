@@ -75,6 +75,7 @@ export class ModeService implements OnModuleInit {
     return MODE_NAMES.map((mode) => ({
       mode,
       name: MODE_CONFIG[mode].name,
+      label: MODE_CONFIG[mode].label,
       color: MODE_CONFIG[mode].color,
     }));
   }

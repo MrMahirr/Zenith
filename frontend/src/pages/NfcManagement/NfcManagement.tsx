@@ -2,17 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNfcChips } from '../../hooks/useNfcChips';
 import type { NfcChip, NfcFilter } from '../../hooks/useNfcChips';
+import { useModeCatalog } from '../../hooks/useModeCatalog';
+import { isModeName } from '../../modes/modeCatalog';
 import { NfcChipCard } from './components/NfcChipCard';
 import { NfcRegisterModal } from './components/NfcRegisterModal';
 import './NfcManagement.css';
-
-const MODE_NAMES: Record<string, string> = {
-  PASSIVE: 'Serbest',
-  CODING: 'Kodlama',
-  FOCUS: 'Odak',
-  RELAX: 'Relax',
-  MEETING: 'Toplantı',
-};
 
 const FILTER_OPTIONS: { key: NfcFilter; label: string; icon: string }[] = [
   { key: 'all',          label: 'Tümü',    icon: '📋' },
@@ -29,6 +23,7 @@ const FILTER_OPTIONS: { key: NfcFilter; label: string; icon: string }[] = [
  */
 export function NfcManagement() {
   const navigate = useNavigate();
+  const { byMode } = useModeCatalog();
   const {
     chips,
     allChips,
@@ -167,7 +162,7 @@ export function NfcManagement() {
                   <span className="nfc-page__log-arrow">→</span>
                   <span className={`nfc-page__log-mode ${log.wasRegistered ? '' : 'nfc-page__log-mode--unknown'}`}>
                     {log.triggeredMode
-                      ? `${MODE_NAMES[log.triggeredMode] || log.triggeredMode} ✓`
+                      ? `${isModeName(log.triggeredMode) ? byMode[log.triggeredMode].label : log.triggeredMode} ✓`
                       : 'Bilinmeyen ⚠'}
                   </span>
                 </div>

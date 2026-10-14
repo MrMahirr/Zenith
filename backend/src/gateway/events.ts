@@ -20,6 +20,7 @@ export const WS = {
   CAMERA_CONFIG_SUBSCRIBE: 'camera_config_subscribe',
   CAMERA_STATUS: 'camera_status',
   CAMERA_STATUS_GET: 'camera_status_get',
+  SETTINGS_SUBSCRIBE: 'settings_subscribe',
 
   // Backend'in yayınladığı
   MODE_CHANGED: 'mode_changed',
@@ -30,6 +31,7 @@ export const WS = {
   NFC_CHIP_LIST_UPDATED: 'nfc_chip_list_updated',
   NFC_UNKNOWN_CHIP: 'nfc_unknown_chip',
   CAMERA_CONFIG: 'camera_config',
+  SETTINGS_CHANGED: 'settings_changed',
 } as const;
 
 /** AI servislerinin el sıkışmada bildirdiği adlar (`auth.service`). */

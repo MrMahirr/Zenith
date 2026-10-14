@@ -8,6 +8,7 @@ import { SensorCard } from '../../components/SensorCard/SensorCard';
 import { useSensorData } from '../../hooks/useSensorData';
 import { usePosture } from '../../hooks/usePosture';
 import { useMode } from '../../hooks/useMode';
+import { useModeCatalog } from '../../hooks/useModeCatalog';
 import { useWeather } from '../../hooks/useWeather';
 import './Dashboard.css';
 import temperatureIcon from '../../assets/icons/thermometer.png';
@@ -20,6 +21,7 @@ export function Dashboard() {
   const sensor = useSensorData();
   const posture = usePosture();
   const mode = useMode();
+  const { modes } = useModeCatalog();
   const weather = useWeather();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -65,6 +67,23 @@ export function Dashboard() {
           </div>
           {isMenuOpen && (
             <div className="dashboard__dropdown-menu glass-card">
+              <span className="dashboard__dropdown-heading label">Mod seç</span>
+              {modes.map((item) => (
+                <button
+                  key={item.mode}
+                  className={`dashboard__dropdown-item ${item.mode === mode.mode ? 'dashboard__dropdown-item--active' : ''}`}
+                  style={{ '--item-color': item.color } as React.CSSProperties}
+                  onClick={() => {
+                    mode.setMode(item.mode);
+                    setIsMenuOpen(false);
+                  }}
+                  id={`mode-select-${item.mode.toLowerCase()}`}
+                >
+                  <span className="dashboard__dropdown-dot" />
+                  <span>{item.icon} {item.label}</span>
+                </button>
+              ))}
+              <div className="dashboard__dropdown-divider" />
               <button className="dashboard__dropdown-item" onClick={() => navigate('/nfc')}>
                 <img src={nfcIcon} alt="NFC" className="dashboard__dropdown-icon" />
                 <span>NFC Kontrol</span>
@@ -72,6 +91,10 @@ export function Dashboard() {
               <button className="dashboard__dropdown-item" onClick={() => navigate('/led')}>
                 <span className="dashboard__dropdown-icon" style={{ fontSize: '18px' }}>💡</span>
                 <span>LED Kontrol</span>
+              </button>
+              <button className="dashboard__dropdown-item" onClick={() => navigate('/settings')}>
+                <span className="dashboard__dropdown-icon" style={{ fontSize: '18px' }}>⚙️</span>
+                <span>Ayarlar</span>
               </button>
             </div>
           )}

@@ -25,6 +25,7 @@ from mjpeg_server import MjpegServer
 from offline_frame import HEIGHT as OFFLINE_HEIGHT
 from offline_frame import WIDTH as OFFLINE_WIDTH
 from offline_frame import render_offline_frame
+from runtime_settings import POSTURE_THRESHOLD_RANGE, coerce_number
 from posture_metrics import (
     EmitThrottle,
     head_to_shoulder_distance,
@@ -60,6 +61,8 @@ class PostureAnalyzer:
             self._output, MJPEG_HOST, MJPEG_PORT, self._native_size
         )
         self._throttle = EmitThrottle(POSTURE_EVENT_INTERVAL)
+        # Panelden degistirilebilir; baslangicta .env degeri gecerlidir.
+        self._threshold = POSTURE_THRESHOLD
 
         self._pose_module = mp.solutions.pose
         self._drawing = mp.solutions.drawing_utils
@@ -82,6 +85,7 @@ class PostureAnalyzer:
 
         self.conn.on("mode_changed", self._handle_mode_change)
         self.conn.on("camera_config", self._handle_camera_config)
+        self.conn.on("settings_changed", self._handle_settings)
         self.conn.on_connect(self._on_backend_connected)
 
     # --- Yasam dongusu -------------------------------------------------------
@@ -131,9 +135,20 @@ class PostureAnalyzer:
             origin = "ayarli adres" if runtime_url else "varsayilan adresler"
             log.info("Kamera kaynagi degisti: %s kullaniliyor.", origin)
 
+    def _handle_settings(self, payload):
+        """Panelden degistirilen duruş esigini uygular (null = .env degeri)."""
+        raw = payload.get("postureThreshold") if isinstance(payload, dict) else None
+        threshold = coerce_number(raw, POSTURE_THRESHOLD, POSTURE_THRESHOLD_RANGE)
+
+        if threshold != self._threshold:
+            self._threshold = threshold
+            self._throttle.reset()
+            log.info("Postur esigi guncellendi: %.2f", threshold)
+
     def _on_backend_connected(self):
         """(Yeniden) baglaninca guncel adresi ister ve mevcut kamera durumunu bildirir."""
         self.conn.emit("camera_config_subscribe")
+        self.conn.emit("settings_subscribe")
         self._publish_camera_status(self._camera.connected)
 
     def _publish_camera_status(self, connected):
@@ -217,7 +232,7 @@ class PostureAnalyzer:
         self._last_landmarks = landmarks
         nose, left_shoulder, right_shoulder = tracked
         distance = head_to_shoulder_distance(nose.y, left_shoulder.y, right_shoulder.y)
-        slouching = is_slouching(distance, POSTURE_THRESHOLD)
+        slouching = is_slouching(distance, self._threshold)
 
         if self._throttle.should_emit(slouching):
             self._throttle.mark_emitted(slouching)

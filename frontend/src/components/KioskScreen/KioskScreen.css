@@ -1,0 +1,28 @@
+.kiosk-idle {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  cursor: none;
+}
+
+.kiosk-idle__clock {
+  font-family: var(--font-mono);
+  font-size: 96px;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  /* Loş: gece odada göz yormaz. */
+  color: rgba(241, 245, 249, 0.28);
+}
+
+/* Gece modu: hafif karartma; dokunmaları engellemez. */
+.kiosk-night {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.45);
+}

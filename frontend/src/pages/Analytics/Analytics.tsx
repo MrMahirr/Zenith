@@ -14,26 +14,70 @@ import {
   Legend,
 } from 'recharts';
 import { useSocket } from '../../hooks/useSocket';
+import { useModeCatalog } from '../../hooks/useModeCatalog';
+import { isModeName } from '../../modes/modeCatalog';
+import { API_URL } from '../../config';
 import './Analytics.css';
 import temperatureIcon from '../../assets/icons/thermometer.png';
 
-const API_URL = `${window.location.protocol}//${window.location.hostname}:3000/api`;
+// ─── API yanıt tipleri ───
+interface SensorHistoryItem {
+  createdAt: string;
+  temperature: number;
+  humidity: number;
+  airQuality: number | null;
+}
 
-const PIE_COLORS: Record<string, string> = {
-  PASSIVE: '#94A3B8',
-  CODING: '#10B981',
-  FOCUS: '#3B82F6',
-  RELAX: '#F59E0B',
-  MEETING: '#EF4444',
-};
+interface PostureHistoryItem {
+  createdAt: string;
+  isSlouching: boolean;
+  slouchPercentage?: number;
+}
 
-const MODE_LABELS: Record<string, string> = {
-  PASSIVE: 'Serbest',
-  CODING: 'Kodlama',
-  FOCUS: 'Odak',
-  RELAX: 'Relax',
-  MEETING: 'Toplanti',
-};
+interface SlouchLogItem {
+  id: number;
+  createdAt: string;
+  distance: number;
+}
+
+interface PostureStats {
+  totalEvents: number;
+  slouchPercentage: number;
+  goodPercentage: number;
+}
+
+/** `posture_update` socket olayı */
+interface PostureUpdatePayload {
+  isActive: boolean;
+  isSlouching: boolean;
+  distance?: number;
+}
+
+// ─── Grafik veri tipleri ───
+interface SensorPoint {
+  time: string;
+  sicaklik: number;
+  nem: number;
+  hava: number | null;
+}
+
+interface PosturePoint {
+  time: string;
+  durum: number;
+  slouchPercentage: number;
+}
+
+interface SlouchLogRow {
+  id: number;
+  time: string;
+  distance: number;
+}
+
+interface PieSlice {
+  name: string;
+  value: number;
+  color: string;
+}
 
 function AnalyticsSkeleton() {
   return (
@@ -112,12 +156,13 @@ const parseSqliteDate = (dateStr: string) => {
 export function Analytics() {
   const navigate = useNavigate();
   const socket = useSocket();
-  const [sensorHistory, setSensorHistory] = useState<any[]>([]);
-  const [postureHistory, setPostureHistory] = useState<any[]>([]);
-  const [slouchLogs, setSlouchLogs] = useState<any[]>([]);
+  const { byMode } = useModeCatalog();
+  const [sensorHistory, setSensorHistory] = useState<SensorPoint[]>([]);
+  const [postureHistory, setPostureHistory] = useState<PosturePoint[]>([]);
+  const [slouchLogs, setSlouchLogs] = useState<SlouchLogRow[]>([]);
   const [postureView, setPostureView] = useState<'chart' | 'table'>('chart');
-  const [postureStats, setPostureStats] = useState<any>(null);
-  const [modeStats, setModeStats] = useState<any>(null);
+  const [postureStats, setPostureStats] = useState<PostureStats | null>(null);
+  const [modeStats, setModeStats] = useState<PieSlice[] | null>(null);
   const [hours, setHours] = useState(24);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -133,14 +178,14 @@ export function Analytics() {
           fetch(`${API_URL}/posture/slouch-logs?hours=${hours}`),
         ]);
 
-        const sensorData = await sRes.json();
-        const postureData = await pRes.json();
-        const postureStatsData = await psRes.json();
-        const modeStatsData = await mRes.json();
-        const slouchLogsData = await slRes.json();
+        const sensorData: SensorHistoryItem[] = await sRes.json();
+        const postureData: PostureHistoryItem[] = await pRes.json();
+        const postureStatsData: PostureStats = await psRes.json();
+        const modeStatsData: Record<string, number> = await mRes.json();
+        const slouchLogsData: SlouchLogItem[] = await slRes.json();
 
         setSensorHistory(
-          sensorData.map((d: any) => ({
+          sensorData.map((d) => ({
             time: parseSqliteDate(d.createdAt).toLocaleTimeString('tr-TR', {
               hour: '2-digit',
               minute: '2-digit',
@@ -152,7 +197,7 @@ export function Analytics() {
         );
 
         setPostureHistory(
-          postureData.map((d: any) => ({
+          postureData.map((d) => ({
             time: parseSqliteDate(d.createdAt).toLocaleTimeString('tr-TR', {
               hour: '2-digit',
               minute: '2-digit',
@@ -165,7 +210,7 @@ export function Analytics() {
         setPostureStats(postureStatsData);
 
         setSlouchLogs(
-          slouchLogsData.map((d: any) => ({
+          slouchLogsData.map((d) => ({
             id: d.id,
             time: parseSqliteDate(d.createdAt).toLocaleTimeString('tr-TR', {
               hour: '2-digit',
@@ -176,12 +221,12 @@ export function Analytics() {
           })),
         );
 
-        const pieData = Object.entries(modeStatsData)
-          .filter(([_, value]) => (value as number) > 0)
-          .map(([key, value]) => ({
-            name: MODE_LABELS[key] || key,
-            value: value as number,
-            color: PIE_COLORS[key] || '#666',
+        const pieData: PieSlice[] = Object.entries(modeStatsData)
+          .filter(([, minutes]) => minutes > 0)
+          .map(([key, minutes]) => ({
+            name: isModeName(key) ? byMode[key].label : key,
+            value: minutes,
+            color: isModeName(key) ? byMode[key].color : '#666',
           }));
 
         setModeStats(pieData.length > 0 ? pieData : null);
@@ -193,10 +238,12 @@ export function Analytics() {
     };
 
     fetchAll();
+    // Mod etiketleri/renkleri katalogdan gelir; katalog yüklenince yeniden çekmek gereksiz.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hours]);
 
   useEffect(() => {
-    const handlePostureUpdate = (payload: any) => {
+    const handlePostureUpdate = (payload: PostureUpdatePayload) => {
       if (!payload.isActive) return;
       
       const nowStr = new Date().toLocaleTimeString('tr-TR', {
@@ -218,7 +265,7 @@ export function Analytics() {
         return [...prev, newPoint].slice(-100);
       });
 
-      setPostureStats((prevStats: any) => {
+      setPostureStats((prevStats) => {
         if (!prevStats) return null;
         const total = prevStats.totalEvents + 1;
         const currentSlouchCount = Math.round((prevStats.slouchPercentage / 100) * prevStats.totalEvents);
@@ -393,8 +440,9 @@ export function Analytics() {
                       borderRadius: '8px',
                       fontSize: '12px',
                     }}
-                    formatter={(value: any, _name: any, props: any) => {
-                      const pct = props?.payload?.slouchPercentage ?? (value === 1 ? 100 : 0);
+                    formatter={(value, _name, item) => {
+                      const point = item?.payload as PosturePoint | undefined;
+                      const pct = point?.slouchPercentage ?? (value === 1 ? 100 : 0);
                       return [`%${pct}`, 'Kambur Oranı'];
                     }}
                   />
@@ -468,7 +516,7 @@ export function Analytics() {
                   paddingAngle={3}
                   dataKey="value"
                 >
-                  {modeStats.map((entry: any, index: number) => (
+                  {modeStats.map((entry, index) => (
                     <Cell key={index} fill={entry.color} />
                   ))}
                 </Pie>

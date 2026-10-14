@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PreferencesService } from '../preferences/preferences.service';
 import {
   DailyForecastEntry,
   HourlyForecastEntry,
@@ -61,9 +62,13 @@ export class WeatherService {
   private currentCache: WeatherData | null = null;
   private panelCache: WeatherPanelData | null = null;
   private lastFetchTime = 0;
+  private cachedCity: string | null = null;
   private readonly cacheDuration = 30 * 60 * 1000;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly preferences: PreferencesService,
+  ) {}
 
   async getCurrentWeather(): Promise<WeatherData> {
     const panel = await this.getWeatherPanel();
@@ -72,16 +77,18 @@ export class WeatherService {
 
   async getWeatherPanel(): Promise<WeatherPanelData> {
     const now = Date.now();
+    // Şehir (panelden) değişirse önbellek geçersizdir.
+    const city = await this.preferences.getWeatherCity();
 
     if (
       this.panelCache &&
+      this.cachedCity === city &&
       now - this.lastFetchTime < this.cacheDuration
     ) {
       return this.panelCache;
     }
 
     const apiKey = this.configService.get<string>('WEATHER_API_KEY');
-    const city = this.configService.get<string>('WEATHER_CITY', 'Izmir');
     const lang = this.configService.get<string>('WEATHER_LANG', 'tr');
     const units = this.configService.get<string>('WEATHER_UNITS', 'metric');
 
@@ -90,16 +97,18 @@ export class WeatherService {
       const mock = this.getMockWeatherPanel(city);
       this.currentCache = mock.current;
       this.panelCache = mock;
+      this.cachedCity = city;
       this.lastFetchTime = now;
       return mock;
     }
 
     try {
+      const query = encodeURIComponent(city);
       const currentUrl =
-        `https://api.openweathermap.org/data/2.5/weather?q=${city}` +
+        `https://api.openweathermap.org/data/2.5/weather?q=${query}` +
         `&appid=${apiKey}&units=${units}&lang=${lang}`;
       const forecastUrl =
-        `https://api.openweathermap.org/data/2.5/forecast?q=${city}` +
+        `https://api.openweathermap.org/data/2.5/forecast?q=${query}` +
         `&appid=${apiKey}&units=${units}&lang=${lang}`;
 
       const [currentResponse, forecastResponse] = await Promise.all([
@@ -115,6 +124,7 @@ export class WeatherService {
 
       this.currentCache = panel.current;
       this.panelCache = panel;
+      this.cachedCity = city;
       this.lastFetchTime = now;
       this.logger.log(
         `Weather panel updated: ${panel.current.city} ${panel.current.temperature}C`,

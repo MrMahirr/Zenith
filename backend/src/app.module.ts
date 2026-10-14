@@ -25,6 +25,7 @@ import { LedModule } from './led/led.module';
 import { CameraModule } from './camera/camera.module';
 import { SettingsModule } from './settings/settings.module';
 import { StatusModule } from './status/status.module';
+import { PreferencesModule } from './preferences/preferences.module';
 
 @Module({
   controllers: [AppController],
@@ -77,6 +78,7 @@ import { StatusModule } from './status/status.module';
     SettingsModule,
     CameraModule,
     StatusModule,
+    PreferencesModule,
   ],
 })
 export class AppModule {}

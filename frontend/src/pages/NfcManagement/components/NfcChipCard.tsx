@@ -1,29 +1,7 @@
 import type { NfcChip } from '../../../hooks/useNfcChips';
+import { useModeCatalog } from '../../../hooks/useModeCatalog';
+import { isModeName } from '../../../modes/modeCatalog';
 import './NfcChipCard.css';
-
-const MODE_COLORS: Record<string, string> = {
-  PASSIVE: '#94A3B8',
-  CODING: '#10B981',
-  FOCUS: '#3B82F6',
-  RELAX: '#F59E0B',
-  MEETING: '#EF4444',
-};
-
-const MODE_NAMES: Record<string, string> = {
-  PASSIVE: 'Serbest',
-  CODING: 'Kodlama',
-  FOCUS: 'Odak',
-  RELAX: 'Relax',
-  MEETING: 'Toplantı',
-};
-
-const MODE_ICONS: Record<string, string> = {
-  PASSIVE: '⚪',
-  CODING: '💻',
-  FOCUS: '🎯',
-  RELAX: '☕',
-  MEETING: '📞',
-};
 
 interface NfcChipCardProps {
   chip: NfcChip;
@@ -51,7 +29,10 @@ function timeAgo(dateStr: string | null): string {
  * kayıtsız çiplerde belirgin "Sisteme Ekle" butonu gösterir.
  */
 export function NfcChipCard({ chip, isHighlighted, onEdit, onDelete }: NfcChipCardProps) {
-  const modeColor = chip.assignedMode ? MODE_COLORS[chip.assignedMode] || '#666' : undefined;
+  const { byMode } = useModeCatalog();
+  const mode =
+    chip.assignedMode && isModeName(chip.assignedMode) ? byMode[chip.assignedMode] : undefined;
+  const modeColor = mode?.color ?? (chip.assignedMode ? '#666' : undefined);
 
   return (
     <div
@@ -70,8 +51,8 @@ export function NfcChipCard({ chip, isHighlighted, onEdit, onDelete }: NfcChipCa
           className="nfc-chip-card__mode-badge"
           style={{ background: `${modeColor}20`, color: modeColor, borderColor: `${modeColor}40` }}
         >
-          <span>{MODE_ICONS[chip.assignedMode] || '📱'}</span>
-          <span>{MODE_NAMES[chip.assignedMode] || chip.assignedMode}</span>
+          <span>{mode?.icon ?? '📱'}</span>
+          <span>{mode?.label ?? chip.assignedMode}</span>
         </div>
       )}
 

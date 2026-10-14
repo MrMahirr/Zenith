@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSocket } from './useSocket';
 
-const API_URL = `http://${window.location.hostname}:3000/api`;
+import { API_URL } from '../config';
 
 // ──────────── Types ────────────
 

@@ -1,7 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
-
-const BACKEND_URL = `http://${window.location.hostname}:3000`;
+import { BACKEND_URL } from '../config';
 
 let socketInstance: Socket | null = null;
 
@@ -20,22 +19,17 @@ function getSocket(): Socket {
 
 /** Socket.io bağlantısını yöneten hook */
 export function useSocket() {
-  const socketRef = useRef<Socket>(getSocket());
+  const socket = getSocket();
 
   useEffect(() => {
-    const socket = socketRef.current;
-
     if (!socket.connected) {
       socket.connect();
     }
 
-    return () => {
-      // Component unmount'ta bağlantıyı KESMİYORUZ
-      // çünkü singleton – diğer component'lar kullanıyor olabilir
-    };
-  }, []);
+    // Unmount'ta bağlantıyı KESMİYORUZ: singleton, diğer bileşenler kullanıyor olabilir.
+  }, [socket]);
 
-  return socketRef.current;
+  return socket;
 }
 
 export { getSocket };

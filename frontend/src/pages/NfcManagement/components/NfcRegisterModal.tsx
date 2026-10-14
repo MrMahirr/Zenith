@@ -1,14 +1,7 @@
 import { useState } from 'react';
 import type { NfcChip } from '../../../hooks/useNfcChips';
+import { useModeCatalog } from '../../../hooks/useModeCatalog';
 import './NfcRegisterModal.css';
-
-const MODE_OPTIONS = [
-  { key: 'PASSIVE',  name: 'Serbest',  color: '#94A3B8', icon: '⚪' },
-  { key: 'CODING',   name: 'Kodlama',  color: '#10B981', icon: '💻' },
-  { key: 'FOCUS',    name: 'Odak',     color: '#3B82F6', icon: '🎯' },
-  { key: 'RELAX',    name: 'Relax',    color: '#F59E0B', icon: '☕' },
-  { key: 'MEETING',  name: 'Toplantı', color: '#EF4444', icon: '📞' },
-] as const;
 
 interface NfcRegisterModalProps {
   chip: NfcChip;
@@ -21,6 +14,7 @@ interface NfcRegisterModalProps {
  * Çipin etiketini ve atanacak modu belirlemek için kullanılır.
  */
 export function NfcRegisterModal({ chip, onClose, onSave }: NfcRegisterModalProps) {
+  const { modes } = useModeCatalog();
   const [label, setLabel] = useState(chip.label || '');
   const [selectedMode, setSelectedMode] = useState(chip.assignedMode || '');
   const [saving, setSaving] = useState(false);
@@ -82,19 +76,19 @@ export function NfcRegisterModal({ chip, onClose, onSave }: NfcRegisterModalProp
         <div className="nfc-modal__field">
           <span className="nfc-modal__field-label label">MOD ATAMA</span>
           <div className="nfc-modal__modes">
-            {MODE_OPTIONS.map((mode) => (
+            {modes.map((mode) => (
               <button
-                key={mode.key}
-                className={`nfc-modal__mode-btn ${selectedMode === mode.key ? 'nfc-modal__mode-btn--active' : ''}`}
+                key={mode.mode}
+                className={`nfc-modal__mode-btn ${selectedMode === mode.mode ? 'nfc-modal__mode-btn--active' : ''}`}
                 style={{
                   '--mode-btn-color': mode.color,
-                  borderColor: selectedMode === mode.key ? mode.color : undefined,
+                  borderColor: selectedMode === mode.mode ? mode.color : undefined,
                 } as React.CSSProperties}
-                onClick={() => setSelectedMode(mode.key)}
-                id={`mode-btn-${mode.key.toLowerCase()}`}
+                onClick={() => setSelectedMode(mode.mode)}
+                id={`mode-btn-${mode.mode.toLowerCase()}`}
               >
                 <span className="nfc-modal__mode-icon">{mode.icon}</span>
-                <span className="nfc-modal__mode-name">{mode.name}</span>
+                <span className="nfc-modal__mode-name">{mode.label}</span>
               </button>
             ))}
           </div>

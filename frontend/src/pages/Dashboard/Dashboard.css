@@ -233,3 +233,28 @@
   object-fit: contain;
 }
 
+
+/* Mod seçimi (ekrandan) */
+.dashboard__dropdown-heading {
+  padding: 4px 12px 2px;
+}
+
+.dashboard__dropdown-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: var(--radius-full);
+  background: var(--item-color, var(--text-muted));
+  box-shadow: 0 0 8px var(--item-color, transparent);
+}
+
+.dashboard__dropdown-item--active {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 3px 0 0 var(--item-color, transparent);
+}
+
+.dashboard__dropdown-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border-subtle);
+}

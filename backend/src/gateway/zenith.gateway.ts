@@ -16,6 +16,7 @@ import { ModeName, isModeName } from '../mode/mode.constants';
 import { NfcService } from '../nfc/nfc.service';
 import { LedService } from '../led/led.service';
 import { CameraService } from '../camera/camera.service';
+import { PreferencesService } from '../preferences/preferences.service';
 import { ServiceRegistry } from '../status/service-registry.service';
 import { LedCommand, WS } from './events';
 import {
@@ -30,6 +31,8 @@ import {
 
 /** Kamera adresi değişikliklerini yalnızca kamera servisine ileten oda. */
 const CAMERA_CONFIG_ROOM = 'camera-config';
+/** Kullanıcı tercihlerini (eşik, sensör aralığı) AI servislerine ileten oda. */
+const SETTINGS_ROOM = 'settings';
 
 /** Mod değişiminde (ortam ışığı kapalıyken) LED'in yanıp sönme süresi. */
 const MODE_FLASH_MS = 5000;
@@ -55,6 +58,7 @@ export class ZenithGateway
   private readonly logger = new Logger(ZenithGateway.name);
 
   private cameraConfigSubscription?: Subscription;
+  private preferencesSubscription?: Subscription;
   private cameraStatus: { connected: boolean } | null = null;
 
   constructor(
@@ -65,6 +69,7 @@ export class ZenithGateway
     private readonly ledService: LedService,
     private readonly cameraService: CameraService,
     private readonly serviceRegistry: ServiceRegistry,
+    private readonly preferences: PreferencesService,
   ) {}
 
   afterInit() {
@@ -73,10 +78,15 @@ export class ZenithGateway
     this.cameraConfigSubscription = this.cameraService.configChanged$.subscribe((config) =>
       this.server.to(CAMERA_CONFIG_ROOM).emit(WS.CAMERA_CONFIG, config),
     );
+
+    this.preferencesSubscription = this.preferences.changed$.subscribe((prefs) =>
+      this.server.to(SETTINGS_ROOM).emit(WS.SETTINGS_CHANGED, this.toServiceSettings(prefs)),
+    );
   }
 
   onModuleDestroy() {
     this.cameraConfigSubscription?.unsubscribe();
+    this.preferencesSubscription?.unsubscribe();
   }
 
   handleConnection(client: Socket) {
@@ -283,7 +293,30 @@ export class ZenithGateway
     }
   }
 
+  // ──────────── Ayarlar ────────────
+
+  /** AI servisleri bağlanınca abone olur ve güncel tercihleri alır. */
+  @SubscribeMessage(WS.SETTINGS_SUBSCRIBE)
+  async handleSettingsSubscribe(client: Socket) {
+    await client.join(SETTINGS_ROOM);
+    client.emit(
+      WS.SETTINGS_CHANGED,
+      this.toServiceSettings(await this.preferences.getOverrides()),
+    );
+  }
+
   // ──────────── Yardımcılar ────────────
+
+  /** AI servislerini ilgilendiren tercihler (`null` = servisin kendi varsayılanı). */
+  private toServiceSettings(prefs: {
+    postureThreshold: number | null;
+    sensorIntervalSeconds: number | null;
+  }) {
+    return {
+      postureThreshold: prefs.postureThreshold,
+      sensorIntervalSeconds: prefs.sensorIntervalSeconds,
+    };
+  }
 
   /** Modu değiştirir ve tüm istemcilere + LED'e yansıtır. */
   private async switchMode(newMode: string) {

@@ -21,7 +21,7 @@
 | Bileşen | Teknoloji | Port | PM2 adı |
 |---|---|---|---|
 | Backend | NestJS, TypeORM, SQLite, Socket.io | 3000 | `zenith-backend` |
-| Frontend | React, Vite | 4173 | `zenith-frontend` |
+| Frontend | React, Vite (üretimde `serve` ile statik sunum) | 4173 | `zenith-frontend` |
 | Kamera / postür | Python, OpenCV, MediaPipe | 5001 (MJPEG) | `zenith-camera` |
 | Sensör | Python (I2C) | — | `zenith-sensor` |
 | NFC | Python (SPI) | — | `zenith-nfc` |
@@ -125,6 +125,8 @@ SIMULATE_HARDWARE=1 python main.py --service sensor     # camera | sensor | led 
 ```bash
 cd ai-service && python -m unittest discover -v   # Python (donanım gerektirmez)
 cd backend    && npm test                        # Jest birim testleri
+cd frontend   && npm test                        # saf mantık testleri (Node >= 22.6)
+cd frontend   && npm run lint                    # ESLint (0 hata beklenir)
 node scripts/ws-led-smoke.js                     # çalışan backend'e WebSocket duman testi
 ```
 
@@ -139,6 +141,18 @@ Ayarlar `.env` dosyalarından okunur; tüm anahtarlar ve açıklamaları için `
 | `POSTURE_THRESHOLD` | ai-service | Kambur duruş eşiği |
 | `LED_COUNT`, `LED_PIN` | ai-service | LED şerit |
 | `LOG_LEVEL` | ai-service | `DEBUG` / `INFO` / `WARNING` |
+
+## Ayarlar sayfası
+
+Dashboard'daki mod menüsünden **Ayarlar**'a girilir:
+
+- **Sistem** (sunucuda saklanır, servisler yeniden başlamadan uygulanır): duruş hassasiyeti (kambur eşiği), sensör okuma aralığı, hava durumu şehri. "Varsayılana dön" ayarı kaldırır ve `.env` değerlerine geri döner.
+- **Ekran (bu cihaz)** (tarayıcıda saklanır): ekran koruyucu (belirli süre dokunulmazsa loş saat; dokununca ya da kambur uyarısında uyanır) ve gece modu (22:00–07:00 arası karartma). İkisi de varsayılan olarak kapalıdır.
+- LED sayısı gibi donanım ayarları `ai-service/.env` ile değişir ve servis yeniden başlatılır.
+
+Modlar dashboard'daki mod menüsünden ekrandan da değiştirilebilir (NFC kart olmadan).
+
+Sunucu adresleri `frontend/src/config` içinde tek yerde hesaplanır. Panel Pi dışından açılacaksa build sırasında `VITE_BACKEND_URL` / `VITE_STREAM_URL` (ya da `VITE_BACKEND_PORT` / `VITE_STREAM_PORT`) verilebilir. Backend ile bağlantı koparsa ekranın üstünde uyarı görünür.
 
 ## Kiosk ekranı
 

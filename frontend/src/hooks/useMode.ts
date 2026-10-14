@@ -1,15 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { isModeName, type ModeName } from '../modes/modeCatalog';
+import { useModeCatalog } from './useModeCatalog';
 import { useSocket } from './useSocket';
 
-export const MODE_CONFIG = {
-  PASSIVE: { name: 'Serbest', color: '#94A3B8', glow: 'rgba(148, 163, 184, 0.15)' },
-  CODING:  { name: 'Kodlama', color: '#10B981', glow: 'rgba(16, 185, 129, 0.15)' },
-  FOCUS:   { name: 'Odak',    color: '#3B82F6', glow: 'rgba(59, 130, 246, 0.15)' },
-  RELAX:   { name: 'Relax',   color: '#F59E0B', glow: 'rgba(245, 158, 11, 0.15)' },
-  MEETING: { name: 'Toplantı',color: '#EF4444', glow: 'rgba(239, 68, 68, 0.15)' },
-} as const;
-
-export type ModeName = keyof typeof MODE_CONFIG;
+export type { ModeName } from '../modes/modeCatalog';
 
 export interface ModeData {
   mode: ModeName;
@@ -19,34 +13,51 @@ export interface ModeData {
   isTransitioning: boolean;
 }
 
-/** NFC kart ile değişen mod bilgisini yöneten hook */
+/** Mod geçiş animasyonunun süresi (ms) */
+const TRANSITION_MS = 5000;
+
+/** Aktif modu izler ve ekrandan mod değiştirmeyi sağlar. */
 export function useMode() {
   const socket = useSocket();
-  const [mode, setMode] = useState<ModeName>('PASSIVE');
+  const { byMode } = useModeCatalog();
+  const [mode, setModeState] = useState<ModeName>('PASSIVE');
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const transitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const handler = (payload: { mode: ModeName }) => {
-      if (MODE_CONFIG[payload.mode]) {
-        setIsTransitioning(true);
-        setMode(payload.mode);
+    const handler = (payload: { mode?: unknown }) => {
+      if (!isModeName(payload.mode)) return;
 
-        // 5 saniyelik geçiş animasyonu
-        setTimeout(() => setIsTransitioning(false), 5000);
-      }
+      setIsTransitioning(true);
+      setModeState(payload.mode);
+
+      if (transitionTimer.current) clearTimeout(transitionTimer.current);
+      transitionTimer.current = setTimeout(() => setIsTransitioning(false), TRANSITION_MS);
     };
 
     socket.on('mode_changed', handler);
-    return () => { socket.off('mode_changed', handler); };
+    return () => {
+      socket.off('mode_changed', handler);
+      if (transitionTimer.current) clearTimeout(transitionTimer.current);
+    };
   }, [socket]);
 
-  const config = MODE_CONFIG[mode];
+  /** Modu değiştirir; sonuç `mode_changed` olayıyla tüm arayüzlere yansır. */
+  const setMode = useCallback(
+    (next: ModeName) => {
+      socket.emit('nfc_mode_change', next);
+    },
+    [socket],
+  );
+
+  const info = byMode[mode];
 
   return {
     mode,
-    name: config.name,
-    color: config.color,
-    glow: config.glow,
+    name: info.label,
+    color: info.color,
+    glow: info.glow,
     isTransitioning,
+    setMode,
   };
 }

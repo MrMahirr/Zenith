@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLed } from '../../hooks/useLed';
 import './LedControl.css';
@@ -18,11 +18,24 @@ export function LedControl() {
   const [localColor, setLocalColor] = useState(state.color);
   const [localBrightness, setLocalBrightness] = useState(state.brightness);
 
-  // Backend'den state güncellendiğinde yerel state'i güncelle (sadece manuel modda değilsek veya ilk yüklemede)
-  useEffect(() => {
-    setLocalColor(state.color === '#000000' && state.mode === 'manual' ? localColor : state.color);
+  // Backend durumu değişince yerel değerleri eşitle (render sırasında, efekt gerektirmez).
+  const [synced, setSynced] = useState({
+    color: state.color,
+    brightness: state.brightness,
+    mode: state.mode,
+  });
+  if (
+    synced.color !== state.color ||
+    synced.brightness !== state.brightness ||
+    synced.mode !== state.mode
+  ) {
+    setSynced({ color: state.color, brightness: state.brightness, mode: state.mode });
+    // Manuel modda siyah, "kapalı" demektir; seçili rengi kaybetme.
+    if (!(state.color === '#000000' && state.mode === 'manual')) {
+      setLocalColor(state.color);
+    }
     setLocalBrightness(state.brightness);
-  }, [state.color, state.brightness, state.mode]); // localColor'u dependency array'e eklemeyin, aksi takdirde renk seçimi bozulabilir
+  }
 
   const handleColorClick = (color: string) => {
     setLocalColor(color);

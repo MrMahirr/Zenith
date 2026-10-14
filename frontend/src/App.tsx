@@ -1,6 +1,8 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './providers/ThemeProvider';
+import { ConnectionBanner } from './components/ConnectionBanner/ConnectionBanner';
+import { KioskScreen } from './components/KioskScreen/KioskScreen';
 import { Dashboard } from './pages/Dashboard/Dashboard';
 import './index.css';
 
@@ -34,6 +36,12 @@ const LedControl = lazy(() =>
   })),
 );
 
+const Settings = lazy(() =>
+  import('./pages/Settings/Settings').then((module) => ({
+    default: module.Settings,
+  })),
+);
+
 function RouteLoadingFallback() {
   return <div className="route-loading">Yukleniyor...</div>;
 }
@@ -41,6 +49,8 @@ function RouteLoadingFallback() {
 function App() {
   return (
     <ThemeProvider>
+      <ConnectionBanner />
+      <KioskScreen />
       <BrowserRouter>
         <Suspense fallback={<RouteLoadingFallback />}>
           <Routes>
@@ -50,6 +60,7 @@ function App() {
             <Route path="/nfc" element={<NfcManagement />} />
             <Route path="/weather" element={<Weather />} />
             <Route path="/led" element={<LedControl />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </Suspense>
       </BrowserRouter>
