@@ -23,6 +23,7 @@ export const WS = {
   SETTINGS_SUBSCRIBE: 'settings_subscribe',
   HARDWARE_STATUS: 'hardware_status',
   MQ135_CALIBRATED: 'mq135_calibrated',
+  POSTURE_CALIBRATED: 'posture_calibrated',
 
   // Backend'in yayınladığı
   MODE_CHANGED: 'mode_changed',
@@ -35,6 +36,7 @@ export const WS = {
   CAMERA_CONFIG: 'camera_config',
   SETTINGS_CHANGED: 'settings_changed',
   MQ135_CALIBRATE: 'mq135_calibrate',
+  POSTURE_CALIBRATE: 'posture_calibrate',
 } as const;
 
 /** AI servislerinin el sıkışmada bildirdiği adlar (`auth.service`). */

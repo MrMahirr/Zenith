@@ -2,6 +2,7 @@ import unittest
 
 from posture_metrics import (
     EmitThrottle,
+    calibrated_threshold,
     head_to_shoulder_distance,
     is_slouching,
     landmarks_visible,
@@ -32,6 +33,27 @@ class DistanceTests(unittest.TestCase):
         self.assertTrue(is_slouching(0.10, 0.15))
         self.assertFalse(is_slouching(0.15, 0.15))
         self.assertFalse(is_slouching(0.30, 0.15))
+
+
+class CalibrationTests(unittest.TestCase):
+    BOUNDS = (0.05, 0.5)
+
+    def test_threshold_is_fraction_of_median_distance(self):
+        self.assertEqual(calibrated_threshold([0.20, 0.25, 0.30], self.BOUNDS), 0.2)
+
+    def test_even_sample_count_averages_middle_pair(self):
+        self.assertEqual(calibrated_threshold([0.2, 0.2, 0.3, 0.3], self.BOUNDS), 0.2)
+
+    def test_outliers_do_not_move_the_median(self):
+        samples = [0.25] * 9 + [0.01]
+        self.assertEqual(calibrated_threshold(samples, self.BOUNDS), 0.2)
+
+    def test_result_is_clamped_to_bounds(self):
+        self.assertEqual(calibrated_threshold([0.01], self.BOUNDS), 0.05)
+        self.assertEqual(calibrated_threshold([0.9], self.BOUNDS), 0.5)
+
+    def test_no_samples_returns_none(self):
+        self.assertIsNone(calibrated_threshold([], self.BOUNDS))
 
 
 class VisibilityTests(unittest.TestCase):

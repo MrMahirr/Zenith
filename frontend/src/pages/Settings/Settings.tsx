@@ -19,6 +19,7 @@ const INTERVAL_OPTIONS = [5, 10, 15, 30, 60, 120, 300];
 const DEFAULT_NIGHT_BRIGHTNESS = 20;
 /** Kalibrasyon sensörde ~10 sn sürer; sonucu bu kadar sonra yeniden oku. */
 const CALIBRATION_REFRESH_MS = 14_000;
+const POSTURE_CALIBRATION_REFRESH_MS = 12_000;
 
 const formatIdle = (minutes: number) => (minutes === 0 ? 'Kapalı' : `${minutes} dk`);
 
@@ -250,6 +251,78 @@ function SystemForm({ view, displayAvailable, onSave }: SystemFormProps) {
   );
 }
 
+interface PostureCalibrationProps {
+  threshold: number | null;
+  onCalibrated: () => void;
+}
+
+/** Kullanıcı dik otururken kişiye özel kambur eşiğini ölçtürür. */
+function PostureCalibration({ threshold, onCalibrated }: PostureCalibrationProps) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  const start = async () => {
+    setMessage(null);
+    setBusy(true);
+
+    try {
+      const response = await fetch(`${API_URL}/hardware/posture/calibrate`, { method: 'POST' });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(typeof data.message === 'string' ? data.message : 'Kalibrasyon başlatılamadı.');
+      }
+
+      setMessage({ ok: true, text: 'Kameraya dönük, dik oturun ve kıpırdamayın…' });
+      timer.current = setTimeout(() => {
+        setBusy(false);
+        setMessage({
+          ok: true,
+          text: 'Tamamlandıysa eşik güncellendi; değişmediyse omuzlarınız kadrajda görünmüyordu.',
+        });
+        onCalibrated();
+      }, POSTURE_CALIBRATION_REFRESH_MS);
+    } catch (error) {
+      setBusy(false);
+      setMessage({ ok: false, text: (error as Error).message });
+    }
+  };
+
+  return (
+    <div className="settings__field">
+      <div className="settings__field-head">
+        <span>Dik oturuşa göre kalibrasyon</span>
+        <span className="settings__value mono">
+          {threshold === null ? 'yok' : threshold.toFixed(2)}
+        </span>
+      </div>
+      <p className="settings__hint">
+        Kameranın önünde dik oturup düğmeye basın; eşik, oturuşunuza göre otomatik ayarlanır.
+      </p>
+      <div className="settings__choices">
+        <button type="button" className="settings-btn" onClick={start} disabled={busy}>
+          {busy ? 'Ölçülüyor…' : 'Dik otur ve kalibre et'}
+        </button>
+      </div>
+      {message && (
+        <span
+          className={message.ok ? 'settings__ok' : 'settings__error'}
+          role={message.ok ? 'status' : 'alert'}
+        >
+          {message.text}
+        </span>
+      )}
+    </div>
+  );
+}
+
 interface HardwareCardProps {
   snapshot: HardwareSnapshot | null;
   cleanVoltage: number | null;
@@ -415,6 +488,14 @@ export function Settings() {
               await save({ mq135CleanVoltage: null });
             }}
           />
+
+          <section className="settings__card glass-card">
+            <h2 className="settings__card-title">Duruş</h2>
+            <PostureCalibration
+              threshold={view?.values.postureThreshold ?? null}
+              onCalibrated={() => void refresh()}
+            />
+          </section>
 
           <section className="settings__card glass-card">
             <h2 className="settings__card-title">Ekran (bu cihaz)</h2>

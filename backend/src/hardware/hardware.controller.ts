@@ -16,9 +16,21 @@ export class HardwareController {
   }
 
   /**
+   * Postürü kalibre eder: kamera servisi ~birkaç saniye dik oturuşu ölçer ve
+   * sonucu `postureThreshold` tercihi olarak kaydeder. MQ135 için aşağıya bakın.
+   *
    * MQ135'i temiz havada kalibre eder. Sensör servisi ~10 saniye ölçüm alır ve
    * sonucu `mq135CleanVoltage` tercihi olarak kaydeder.
    */
+  @Post('posture/calibrate')
+  @HttpCode(202)
+  calibratePosture() {
+    if (!this.hardware.requestPostureCalibration()) {
+      throw new ServiceUnavailableException('Kamera servisi bağlı değil; kalibrasyon başlatılamadı.');
+    }
+    return { requested: true };
+  }
+
   @Post('mq135/calibrate')
   @HttpCode(202)
   calibrate() {

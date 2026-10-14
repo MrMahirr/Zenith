@@ -31,12 +31,17 @@ export class HardwareService {
   private readonly reports = new Map<ServiceName, ServiceReport>();
   private readonly changedSubject = new Subject<void>();
   private readonly calibrateSubject = new Subject<void>();
+  private readonly postureCalibrateSubject = new Subject<void>();
 
   /** Rapor içeriği değiştiğinde (yalnızca gerçek değişimde) tetiklenir. */
   readonly changed$: Observable<void> = this.changedSubject.asObservable();
 
   /** MQ135 kalibrasyon isteği; gateway sensör servisine iletir. */
   readonly calibrateRequested$: Observable<void> = this.calibrateSubject.asObservable();
+
+  /** Postür kalibrasyon isteği; gateway kamera servisine iletir. */
+  readonly postureCalibrateRequested$: Observable<void> =
+    this.postureCalibrateSubject.asObservable();
 
   constructor(
     private readonly registry: ServiceRegistry,
@@ -100,6 +105,15 @@ export class HardwareService {
       services,
       display: this.display.getView(),
     };
+  }
+
+  /** Kamera servisinden dik oturuş kalibrasyonu ister. */
+  requestPostureCalibration(): boolean {
+    if (!this.registry.snapshot().camera) {
+      return false;
+    }
+    this.postureCalibrateSubject.next();
+    return true;
   }
 
   /** Sensör servisinden temiz hava kalibrasyonu ister. */

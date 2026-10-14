@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 
 import cv2
 import mediapipe as mp
@@ -29,6 +30,7 @@ from runtime_settings import POSTURE_THRESHOLD_RANGE, coerce_number
 from hardware_report import OK, WARN, device
 from posture_metrics import (
     EmitThrottle,
+    calibrated_threshold,
     head_to_shoulder_distance,
     is_slouching,
     landmarks_visible,
@@ -44,6 +46,9 @@ _TRACKED_LANDMARKS = (
 )
 # Kamera yokken yer tutucu karenin yenilenme araligi (saniye).
 _OFFLINE_FRAME_INTERVAL = 1.0
+# Kalibrasyon: gecerli bu kadar olcum toplanir ya da sure dolarsa vazgecilir.
+_CALIBRATION_SAMPLES = 20
+_CALIBRATION_TIMEOUT = 20.0
 
 
 class PostureAnalyzer:
@@ -83,8 +88,12 @@ class PostureAnalyzer:
         self._reset_requested = threading.Event()
         self._frame_counter = 0
         self._last_landmarks = None
+        # None degilse dik oturus olcumleri toplaniyordur (kalibrasyon).
+        self._calibration_samples = None
+        self._calibration_deadline = 0.0
 
         self.conn.on("mode_changed", self._handle_mode_change)
+        self.conn.on("posture_calibrate", self._handle_calibrate_request)
         self.conn.on("camera_config", self._handle_camera_config)
         self.conn.on("settings_changed", self._handle_settings)
         self.conn.on_connect(self._on_backend_connected)
@@ -127,6 +136,12 @@ class PostureAnalyzer:
         else:
             log.info("Serbest mod aktif. Postur analizi devre disi.")
 
+    def _handle_calibrate_request(self, _payload=None):
+        """Kullanici dik otururken kisiye ozel esigi olcmek icin ornek toplamaya baslar."""
+        self._calibration_samples = []
+        self._calibration_deadline = time.monotonic() + _CALIBRATION_TIMEOUT
+        log.info("Postur kalibrasyonu basladi; dik oturun.")
+
     def _handle_camera_config(self, payload):
         """Backend'den gelen kamera adresi ayarini uygular (null = varsayilanlara don)."""
         runtime_url = payload.get("url") if isinstance(payload, dict) else None
@@ -168,7 +183,11 @@ class PostureAnalyzer:
 
     def _needs_frames(self):
         """Kare cozmek yalnizca analiz aciksa ya da yayini izleyen varsa anlamlidir."""
-        return self._analysis_enabled or self._server.active_clients > 0
+        return (
+            self._analysis_enabled
+            or self._calibration_samples is not None
+            or self._server.active_clients > 0
+        )
 
     def _native_size(self):
         return self._camera.frame_size or (OFFLINE_WIDTH, OFFLINE_HEIGHT)
@@ -178,6 +197,8 @@ class PostureAnalyzer:
 
         while not self._stop_event.is_set():
             try:
+                self._check_calibration_timeout()
+
                 if self._reset_requested.is_set():
                     self._reset_requested.clear()
                     self._reset_analysis_state()
@@ -206,7 +227,7 @@ class PostureAnalyzer:
 
     def _process_live_frame(self, frame):
         output = frame
-        if self._analysis_enabled:
+        if self._analysis_enabled or self._calibration_samples is not None:
             self._frame_counter += 1
             if self._frame_counter % POSTURE_ANALYSIS_FRAME_STEP == 0:
                 self._analyze(frame)
@@ -219,6 +240,27 @@ class PostureAnalyzer:
                 )
 
         self._output.publish(output)
+
+    def _collect_calibration_sample(self, distance):
+        self._calibration_samples.append(float(distance))
+
+        if len(self._calibration_samples) < _CALIBRATION_SAMPLES:
+            return
+
+        threshold = calibrated_threshold(
+            self._calibration_samples, POSTURE_THRESHOLD_RANGE
+        )
+        self._calibration_samples = None
+        log.info("Postur kalibre edildi: esik %.3f", threshold)
+        self.conn.emit("posture_calibrated", {"threshold": threshold})
+
+    def _check_calibration_timeout(self):
+        if (
+            self._calibration_samples is not None
+            and time.monotonic() > self._calibration_deadline
+        ):
+            self._calibration_samples = None
+            log.warning("Postur kalibrasyonu zaman asimi: kisi kadrajda gorunmuyor.")
 
     def _analyze(self, frame):
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -242,6 +284,12 @@ class PostureAnalyzer:
         self._last_landmarks = landmarks
         nose, left_shoulder, right_shoulder = tracked
         distance = head_to_shoulder_distance(nose.y, left_shoulder.y, right_shoulder.y)
+
+        if self._calibration_samples is not None:
+            self._collect_calibration_sample(distance)
+
+        if not self._analysis_enabled:
+            return
         slouching = is_slouching(distance, self._threshold)
 
         if self._throttle.should_emit(slouching):

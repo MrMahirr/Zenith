@@ -83,6 +83,18 @@ describe('HardwareService', () => {
     expect(snapshot.display).toEqual({ available: true, percent: 80 });
   });
 
+  it('refuses posture calibration when the camera service is not connected', () => {
+    const { service, registry } = create();
+    let requested = 0;
+    service.postureCalibrateRequested$.subscribe(() => requested++);
+
+    expect(service.requestPostureCalibration()).toBe(false);
+
+    registry.register('c1', 'camera');
+    expect(service.requestPostureCalibration()).toBe(true);
+    expect(requested).toBe(1);
+  });
+
   it('refuses calibration when the sensor service is not connected', () => {
     const { service, registry } = create();
     let requested = 0;

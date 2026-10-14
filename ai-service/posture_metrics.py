@@ -16,6 +16,29 @@ def is_slouching(distance, threshold):
     return distance < threshold
 
 
+# Dik oturus mesafesinin hangi orani esik olur: bunun altina inen kambur sayilir.
+CALIBRATION_RATIO = 0.8
+
+
+def calibrated_threshold(distances, bounds, ratio=CALIBRATION_RATIO):
+    """Dik oturus olcumlerinin ortancasindan kisiye ozel kambur esigini hesaplar.
+
+    `bounds` disina cikan sonuc sinira cekilir; olcum yoksa None doner.
+    """
+    if not distances:
+        return None
+
+    ordered = sorted(distances)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        median = ordered[middle]
+    else:
+        median = (ordered[middle - 1] + ordered[middle]) / 2.0
+
+    low, high = bounds
+    return round(min(max(median * ratio, low), high), 3)
+
+
 def landmarks_visible(visibilities, minimum):
     """Verilen tum noktalarin gorunurlugu `minimum` esigini geciyorsa True."""
     return all(value >= minimum for value in visibilities)

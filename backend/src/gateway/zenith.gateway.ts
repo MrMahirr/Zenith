@@ -96,6 +96,9 @@ export class ZenithGateway
       this.hardware.calibrateRequested$.subscribe(() =>
         this.server.to(SETTINGS_ROOM).emit(WS.MQ135_CALIBRATE),
       ),
+      this.hardware.postureCalibrateRequested$.subscribe(() =>
+        this.server.to(SETTINGS_ROOM).emit(WS.POSTURE_CALIBRATE),
+      ),
     ];
   }
 
@@ -354,6 +357,22 @@ export class ZenithGateway
       this.logger.log(`MQ135 kalibre edildi: temiz hava ${voltage} V`);
     } catch (error) {
       this.logger.error(`MQ135 kalibrasyonu kaydedilemedi: ${error}`);
+    }
+  }
+
+  /** Kamera servisinin kalibrasyon sonucu: kişiye özel kambur eşiği. */
+  @SubscribeMessage(WS.POSTURE_CALIBRATED)
+  async handlePostureCalibrated(client: Socket, payload: { threshold?: unknown }) {
+    const threshold = payload?.threshold;
+    if (this.serviceRegistry.serviceOf(client.id) !== 'camera' || typeof threshold !== 'number') {
+      return;
+    }
+
+    try {
+      await this.preferences.update({ postureThreshold: threshold });
+      this.logger.log(`Postür kalibre edildi: eşik ${threshold}`);
+    } catch (error) {
+      this.logger.error(`Postür kalibrasyonu kaydedilemedi: ${error}`);
     }
   }
 
