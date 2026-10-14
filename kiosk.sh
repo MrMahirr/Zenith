@@ -75,6 +75,11 @@ while true; do
     --no-first-run \
     --disable-session-crashed-bubble \
     --hide-crash-restore-bubble \
+    --start-fullscreen \
+    --force-dark-mode \
+    --disable-restore-session-state \
+    --lang=tr-TR \
+    --disable-features=Translate,TranslateUI,WaylandWindowDecorations \
     --ozone-platform=wayland &
   pid=$!
   log "tarayici basladi (pid $pid)"
