@@ -53,3 +53,6 @@ ai-service/Miniforge3-Linux-aarch64.sh
 # Database
 *.sqlite
 *.sqlite-journal
+
+# Obsidian planlama vault (yerel)
+zenith-vault/
