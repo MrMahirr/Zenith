@@ -46,8 +46,8 @@ class CameraSource:
         self._frame_size = None
         self._frames_skipped = False
 
-        self._last_error = None
-        self._last_error_at = 0.0
+        # Adres basina son hata mesaji ve zamani (adaylar arasi gecis spam yapmasin).
+        self._logged_failures = {}
 
     @property
     def connected(self):
@@ -155,7 +155,7 @@ class CameraSource:
 
         if connected:
             self._connected.set()
-            self._last_error = None
+            self._logged_failures.clear()
             log.info("Kamera baglandi: %s", url)
         else:
             self._connected.clear()
@@ -165,13 +165,10 @@ class CameraSource:
             log.warning("Kamera baglantisi kesildi: %s%s", url, detail)
 
     def _log_connect_failure(self, url, exc):
-        message = f"{url}: {exc.__class__.__name__}: {exc}"
+        message = f"{exc.__class__.__name__}: {exc}"
         now = time.monotonic()
+        last_message, last_at = self._logged_failures.get(url, (None, 0.0))
 
-        if (
-            message != self._last_error
-            or now - self._last_error_at >= _REPEATED_ERROR_LOG_SECONDS
-        ):
-            log.warning("Kameraya baglanilamadi (%s)", message)
-            self._last_error = message
-            self._last_error_at = now
+        if message != last_message or now - last_at >= _REPEATED_ERROR_LOG_SECONDS:
+            log.warning("Kameraya baglanilamadi (%s: %s)", url, message)
+            self._logged_failures[url] = (message, now)
