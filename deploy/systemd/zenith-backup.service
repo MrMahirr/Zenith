@@ -1,0 +1,8 @@
+[Unit]
+Description=Zenith veritabanı yedeği
+
+[Service]
+Type=oneshot
+ExecStart=@ROOT@/scripts/backup-db.sh
+Nice=10
+IOSchedulingClass=idle

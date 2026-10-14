@@ -1,0 +1,9 @@
+# Zenith AI servisi icin conda ortami (Miniforge). Paketler pip ile kurulur:
+#   conda env create -f ai-service/environment.yml
+#   conda run -n zenith-ai pip install -r ai-service/requirements.txt -c ai-service/requirements.lock
+name: zenith-ai
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip

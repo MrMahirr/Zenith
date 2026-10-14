@@ -1,0 +1,11 @@
+[Unit]
+Description=Zenith veritabanını günlük yedekle
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+# Cihaz o saatte kapalıysa açılışta kaçırılan yedeği alır.
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target
