@@ -82,7 +82,11 @@ export class DisplayService implements OnModuleInit, OnModuleDestroy {
 
   /** Hedef parlaklığı arka ışığa uygular (değişmediyse yazmaz). */
   async apply(now: Date = new Date()): Promise<void> {
-    const percent = await this.targetPercent(now);
+    let percent = await this.targetPercent(now);
+    if (percent === null && this.lastAppliedPercent !== null) {
+      // Tercih kaldırıldı: bizim değiştirdiğimiz parlaklığı varsayılana (tam) döndür.
+      percent = 100;
+    }
     if (percent === null || percent === this.lastAppliedPercent) {
       return;
     }

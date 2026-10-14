@@ -81,6 +81,17 @@ describe('DisplayService', () => {
     expect(backlight.writes).toEqual([26, 255]);
   });
 
+  it('restores full brightness when the preference is removed', async () => {
+    const { service, preferences, backlight } = create();
+    await preferences.update({ displayBrightness: 40 });
+    await service.apply(at(12));
+
+    await preferences.update({ displayBrightness: null });
+    await service.apply(at(12));
+
+    expect(backlight.writes).toEqual([102, 255]);
+  });
+
   it('does not rewrite an unchanged value', async () => {
     const { service, preferences, backlight } = create();
     await preferences.update({ displayBrightness: 70 });
