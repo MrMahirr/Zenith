@@ -21,6 +21,8 @@ export const WS = {
   CAMERA_STATUS: 'camera_status',
   CAMERA_STATUS_GET: 'camera_status_get',
   SETTINGS_SUBSCRIBE: 'settings_subscribe',
+  HARDWARE_STATUS: 'hardware_status',
+  MQ135_CALIBRATED: 'mq135_calibrated',
 
   // Backend'in yayınladığı
   MODE_CHANGED: 'mode_changed',
@@ -32,6 +34,7 @@ export const WS = {
   NFC_UNKNOWN_CHIP: 'nfc_unknown_chip',
   CAMERA_CONFIG: 'camera_config',
   SETTINGS_CHANGED: 'settings_changed',
+  MQ135_CALIBRATE: 'mq135_calibrate',
 } as const;
 
 /** AI servislerinin el sıkışmada bildirdiği adlar (`auth.service`). */

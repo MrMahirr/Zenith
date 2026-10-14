@@ -6,19 +6,33 @@ export interface Preferences {
   postureThreshold: number | null;
   sensorIntervalSeconds: number | null;
   weatherCity: string | null;
+  displayBrightness: number | null;
+  displayNightBrightness: number | null;
+  mq135CleanVoltage: number | null;
 }
 
 export interface PreferencesView {
   values: Preferences;
-  defaults: { postureThreshold: number; sensorIntervalSeconds: number; weatherCity: string };
+  defaults: {
+    postureThreshold: number;
+    sensorIntervalSeconds: number;
+    weatherCity: string;
+    displayBrightness: number;
+  };
   limits: {
     postureThreshold: { min: number; max: number };
     sensorIntervalSeconds: { min: number; max: number };
     weatherCity: { maxLength: number };
+    displayBrightness: { min: number; max: number };
+    displayNightBrightness: { min: number; max: number };
+    mq135CleanVoltage: { min: number; max: number };
   };
 }
 
-async function request(method: 'GET' | 'PUT', body?: Preferences): Promise<PreferencesView> {
+async function request(
+  method: 'GET' | 'PUT',
+  body?: Partial<Preferences>,
+): Promise<PreferencesView> {
   const response = await fetch(`${API_URL}/preferences`, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -40,7 +54,7 @@ async function request(method: 'GET' | 'PUT', body?: Preferences): Promise<Prefe
   return response.json();
 }
 
-/** Sistem tercihlerini (duruş eşiği, sensör aralığı, hava durumu şehri) okur ve kaydeder. */
+/** Sistem tercihlerini okur ve kaydeder. */
 export function usePreferences() {
   const [view, setView] = useState<PreferencesView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,11 +75,19 @@ export function usePreferences() {
     };
   }, []);
 
-  const save = useCallback(async (values: Preferences) => {
+  /** Verilen alanları kaydeder (gönderilmeyen alanlara dokunulmaz, `null` sıfırlar). */
+  const save = useCallback(async (values: Partial<Preferences>) => {
     const next = await request('PUT', values);
     setView(next);
     return next;
   }, []);
 
-  return { view, error, save };
+  /** Sunucudaki güncel değerleri yeniden okur (ör. kalibrasyon sonrası). */
+  const refresh = useCallback(async () => {
+    const next = await request('GET');
+    setView(next);
+    return next;
+  }, []);
+
+  return { view, error, save, refresh };
 }

@@ -19,11 +19,9 @@ export class PreferencesController {
   /** Kısmi güncelleme; `null` alanı varsayılana döndürür. */
   @Put()
   async update(@Body() body: UpdatePreferencesDto) {
-    await this.preferences.update({
-      postureThreshold: body.postureThreshold,
-      sensorIntervalSeconds: body.sensorIntervalSeconds,
-      weatherCity: body.weatherCity,
-    });
+    // ValidationPipe (whitelist) yalnızca bildirilen alanları bırakır; gönderilmeyen
+    // alan `undefined` kalır ve dokunulmaz.
+    await this.preferences.update({ ...body });
     return this.preferences.getView();
   }
 }

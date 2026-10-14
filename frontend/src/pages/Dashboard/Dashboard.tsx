@@ -5,6 +5,7 @@ import { ModeIndicator } from '../../components/ModeIndicator/ModeIndicator';
 import { PostureAlert } from '../../components/PostureAlert/PostureAlert';
 import { WeatherWidget } from '../../components/WeatherWidget/WeatherWidget';
 import { SensorCard } from '../../components/SensorCard/SensorCard';
+import { HardwareBanner } from '../../components/HardwareBanner/HardwareBanner';
 import { useSensorData } from '../../hooks/useSensorData';
 import { usePosture } from '../../hooks/usePosture';
 import { useMode } from '../../hooks/useMode';
@@ -56,6 +57,8 @@ export function Dashboard() {
       className="dashboard"
       style={{ '--mode-color': mode.color, '--mode-glow': mode.glow } as React.CSSProperties}
     >
+      <HardwareBanner />
+
       {/* Mode geçiş ambient glow */}
       <div className={`dashboard__ambient ${mode.isTransitioning ? 'dashboard__ambient--active' : ''}`} />
 

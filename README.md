@@ -1,11 +1,11 @@
 # Zenith Smart Room
 
-**Zenith Smart Room**, çalışma odasını "akıllı, duyarlı ve sağlığa odaklı" bir ortama dönüştüren IoT projesidir. Bir Raspberry Pi üzerinde çalışır; kameradan postürü, sensörlerden oda havasını, NFC kartlardan çalışma modunu okur ve hepsini 7 inç dokunmatik ekranda tek panelde gösterir.
+**Zenith Smart Room**, çalışma odasını "akıllı, duyarlı ve sağlığa odaklı" bir ortama dönüştüren IoT projesidir. Bir Raspberry Pi üzerinde çalışır; kameradan postürü, sensörlerden oda havasını, NFC kartlardan çalışma modunu okur ve hepsini 7 inç dokunmatik ekranda (resmi Raspberry Pi DSI ekranı, 800×480) tek panelde gösterir.
 
 - **Postür analizi:** Kamera görüntüsü MediaPipe ile analiz edilir; kambur duruşta arayüz uyarır ve LED şerit kırmızıya döner.
 - **Ortam farkındalığı:** BME280 (sıcaklık, nem, basınç) ve MQ135 (gaz) verileri anlık izlenir, geçmişe dönük grafikler sunulur.
 - **Modlar (NFC):** Kart okutarak oda modu değiştirilir (CODING, FOCUS, RELAX, MEETING, PASSIVE); her mod WS2812B LED şeride kendi rengini verir.
-- **Panel:** React arayüzü 1024×600 ekrana göre tasarlanmıştır; Pi açılınca tam ekran kiosk olarak başlar.
+- **Panel:** React arayüzü 800×480 ekrana göre doğrulanmıştır (daha büyük ekranlarda da çalışır); Pi açılınca tam ekran kiosk olarak başlar.
 
 ## Mimari
 
@@ -153,6 +153,16 @@ Dashboard'daki mod menüsünden **Ayarlar**'a girilir:
 Modlar dashboard'daki mod menüsünden ekrandan da değiştirilebilir (NFC kart olmadan).
 
 Sunucu adresleri `frontend/src/config` içinde tek yerde hesaplanır. Panel Pi dışından açılacaksa build sırasında `VITE_BACKEND_URL` / `VITE_STREAM_URL` (ya da `VITE_BACKEND_PORT` / `VITE_STREAM_PORT`) verilebilir. Backend ile bağlantı koparsa ekranın üstünde uyarı görünür.
+
+## Donanım durumu ve güç
+
+**Ayarlar → Donanım durumu** kartı, her cihazın sağlığını gösterir: BME280, ADS1115, MQ135 sinyali, RC522, LED şerit, kamera akışı, **güç kaynağı** ve işlemci sıcaklığı. Bir kablo gevşediğinde ya da gerilim düştüğünde ana ekranda uyarı bandı çıkar.
+
+- **Düşük gerilim:** `vcgencmd get_throttled` izlenir. LED şerit ve ekran aynı beslemeden çalışıyorsa Pi kısılabilir. En az 5V/3A adaptör kullanın; şeridi ayrı bir 5V kaynaktan beslemek en iyisidir.
+- **LED güç sınırı:** `LED_MAX_CURRENT_MA` (varsayılan 1000 mA) aşılacaksa parlaklık otomatik kısılır; ayrı beslemeli kurulumda `0` yaparak kaldırın.
+- **MQ135:** sensör ısındıktan (en az 10 dk) sonra temiz havada **Temiz havada kalibre et** düğmesine basın; hava kalitesi, kalibrasyon anına göre göreli bir indekse (0 = temiz) dönüşür. Kalibrasyon yokken eski dogrusal ölçek kullanılır. ADS1115 3.3V ile besleniyorsa MQ135 AO çıkışı 3.6 V'u aşmamalıdır; aşarsa kart uyarır (gerilim bölücü ekleyin ya da ADS1115'i 5V'tan besleyin, `ADS1115_SUPPLY_VOLTS`).
+- **Ekran parlaklığı:** resmi DSI ekranın arka ışığı (`/sys/class/backlight`) yazılımdan ayarlanır; Ayarlar'dan gündüz ve gece (22:00–07:00) parlaklığı seçilir.
+- `GET /api/hardware` aynı bilgiyi JSON olarak verir.
 
 ## Kiosk ekranı
 

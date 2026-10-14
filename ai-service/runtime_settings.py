@@ -3,6 +3,7 @@
 # Backend (`preferences.service.ts`) ile ayni sinirlar.
 POSTURE_THRESHOLD_RANGE = (0.05, 0.5)
 SENSOR_INTERVAL_RANGE = (5.0, 300.0)
+MQ135_CLEAN_VOLTAGE_RANGE = (0.05, 4.0)
 
 
 def coerce_number(value, default, bounds):

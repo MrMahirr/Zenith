@@ -26,6 +26,7 @@ from offline_frame import HEIGHT as OFFLINE_HEIGHT
 from offline_frame import WIDTH as OFFLINE_WIDTH
 from offline_frame import render_offline_frame
 from runtime_settings import POSTURE_THRESHOLD_RANGE, coerce_number
+from hardware_report import OK, WARN, device
 from posture_metrics import (
     EmitThrottle,
     head_to_shoulder_distance,
@@ -153,6 +154,15 @@ class PostureAnalyzer:
 
     def _publish_camera_status(self, connected):
         self.conn.emit("camera_status", {"connected": bool(connected)})
+
+        if connected:
+            report = device("camera", "Kamera akisi", OK, "Baglandi")
+        else:
+            report = device(
+                "camera", "Kamera akisi", WARN,
+                "Akis yok; telefondaki kamera uygulamasi acik ve ayni agda mi?",
+            )
+        self.conn.emit("hardware_status", {"devices": [report]})
 
     # --- Islem dongusu -------------------------------------------------------
 

@@ -25,6 +25,13 @@ class FakeConnection:
         return True
 
 
+class DeviceFailure(sensor_manager.DeviceReadError):
+    """Belirli bir cihazin okunamadigini simule eder."""
+
+    def __init__(self, device_id, message):
+        super().__init__(device_id, message)
+
+
 class ScriptedHardware:
     """read() cagrilarini sirayla `script`'e gore sonuclandirir; bitince yoneticiyi durdurur."""
 
@@ -66,7 +73,9 @@ class SensorManagerTests(unittest.TestCase):
             self.addCleanup(patch.stop)
 
     def _run(self, hardware):
-        manager = sensor_manager.SensorManager(hardware=hardware)
+        return self._run_manager(sensor_manager.SensorManager(hardware=hardware), hardware)
+
+    def _run_manager(self, manager, hardware):
         manager.conn = FakeConnection()
         hardware.manager = manager
 
@@ -80,9 +89,9 @@ class SensorManagerTests(unittest.TestCase):
         hardware = ScriptedHardware([dict(READING), dict(READING)])
         manager = self._run(hardware)
 
-        events = [event for event, _ in manager.conn.emitted]
-        self.assertGreaterEqual(events.count("sensor_update"), 2)
-        self.assertEqual(manager.conn.emitted[0][1], READING)
+        updates = [data for event, data in manager.conn.emitted if event == "sensor_update"]
+        self.assertGreaterEqual(len(updates), 2)
+        self.assertEqual(updates[0], {**READING, "air_quality": 10.0})
 
     def test_isolated_error_does_not_reopen_hardware(self):
         hardware = ScriptedHardware([OSError("tek hata"), dict(READING)])
@@ -122,6 +131,61 @@ class SensorManagerTests(unittest.TestCase):
 
         manager._handle_settings("garbage")                         # bozuk yuk
         self.assertEqual(manager._read_interval, default)
+
+    def test_calibrated_air_quality_replaces_the_legacy_scale(self):
+        hardware = ScriptedHardware([dict(READING)])
+        manager = sensor_manager.SensorManager(hardware=hardware)
+        manager._handle_settings({"mq135CleanVoltage": 0.5})
+        manager = self._run_manager(manager, hardware)
+
+        update = next(d for e, d in manager.conn.emitted if e == "sensor_update")
+        # 0.5 V temiz havayla ayni -> goreli indeks 0 (eski olcekte 10 olurdu).
+        self.assertEqual(update["air_quality"], 0.0)
+
+    def test_hardware_status_reports_device_errors(self):
+        hardware = ScriptedHardware([DeviceFailure("ads1115", "i2c koptu")] * 3 + [dict(READING)])
+        manager = self._run(hardware)
+
+        reports = [d["devices"] for e, d in manager.conn.emitted if e == "hardware_status"]
+        error_states = [
+            {dev["id"]: dev["state"] for dev in devices} for devices in reports
+        ]
+        self.assertTrue(any(s.get("ads1115") == "error" for s in error_states))
+        self.assertTrue(any(s.get("ads1115") == "ok" for s in error_states))
+
+    def test_hardware_status_is_not_repeated_when_unchanged(self):
+        hardware = ScriptedHardware([dict(READING)] * 5)
+        manager = self._run(hardware)
+
+        reports = [d for e, d in manager.conn.emitted if e == "hardware_status"]
+        self.assertLess(len(reports), 5)
+
+    def test_calibration_reports_the_median_clean_voltage(self):
+        samples = [dict(READING, gas_voltage=v) for v in (0.50, 0.52, 0.51, 0.49, 0.50,
+                                                          0.51, 0.50, 0.52, 0.50, 0.51)]
+        hardware = ScriptedHardware(samples)
+        manager = sensor_manager.SensorManager(hardware=hardware)
+        manager.conn = FakeConnection()
+        hardware.manager = manager
+
+        with mock.patch.object(sensor_manager, "_CALIBRATION_SPACING_SECONDS", 0.0):
+            manager._run_calibration()
+
+        calibrated = [d for e, d in manager.conn.emitted if e == "mq135_calibrated"]
+        self.assertEqual(calibrated, [{"cleanVoltage": 0.505}])
+
+    def test_calibration_is_rejected_when_readings_are_unstable(self):
+        samples = [dict(READING, gas_voltage=v) for v in (0.2, 1.2, 0.3, 1.1, 0.2,
+                                                          1.3, 0.2, 1.2, 0.3, 1.1)]
+        hardware = ScriptedHardware(samples)
+        manager = sensor_manager.SensorManager(hardware=hardware)
+        manager.conn = FakeConnection()
+        hardware.manager = manager
+
+        with mock.patch.object(sensor_manager, "_CALIBRATION_SPACING_SECONDS", 0.0):
+            manager._run_calibration()
+
+        self.assertEqual([e for e, _ in manager.conn.emitted], [])
 
     def test_voltage_to_air_quality_scale(self):
         self.assertEqual(sensor_manager.voltage_to_air_quality(0.0), 0.0)

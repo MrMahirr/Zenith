@@ -1,34 +1,48 @@
 """BME280 (sicaklik/nem/basinc) ve MQ135 (gaz, ADS1115 uzerinden) okuyup backend'e gonderen servis."""
 
 import logging
+import statistics
 import threading
+import time
 
 from config import (
+    ADS1115_SUPPLY_VOLTS,
     BME280_ADDRESS,
     I2C_PORT,
+    MQ135_VCC_VOLTS,
     SENSOR_MAX_CONSECUTIVE_ERRORS,
     SENSOR_READ_INTERVAL,
     SENSOR_REINIT_DELAY,
     SIMULATE_HARDWARE,
 )
+import mq135
 from connection_manager import ConnectionManager
-from runtime_settings import SENSOR_INTERVAL_RANGE, coerce_number
+from hardware_report import ERROR, OK, UNKNOWN, device
+from runtime_settings import MQ135_CLEAN_VOLTAGE_RANGE, SENSOR_INTERVAL_RANGE, coerce_number
+from system_health import read_system_devices
 
 log = logging.getLogger("zenith.sensor")
 
 MQ135_ADC_CHANNEL = 0
-MQ135_FULL_SCALE_VOLTS = 5.0
-# MQ135 beslemesiz/kopuk oldugunda AO ~0 V okunur ve "mukemmel hava" gibi gorunur.
-_MQ135_DEAD_SIGNAL_VOLTS = 0.01
+# Guc/sicaklik bilgisi cok sik degismez; her okuma turunda sorgulanmaz.
+_SYSTEM_HEALTH_INTERVAL_SECONDS = 30.0
+# Kalibrasyon: temiz havada bu kadar olcumun ortancasi alinir.
+_CALIBRATION_SAMPLES = 10
+_CALIBRATION_SPACING_SECONDS = 1.0
+_MAX_CALIBRATION_SPREAD_VOLTS = 0.15
 
 
 def voltage_to_air_quality(voltage):
-    """MQ135 gerilimini 0-100 olcegine cevirir.
+    """Kalibrasyonsuz (eski dogrusal) 0-100 olcegi; geriye uyumluluk icin korunur."""
+    return mq135.legacy_index(voltage)
 
-    Bu degerlendirme kalibre degildir: gercek ppm icin temiz havada R0
-    kalibrasyonu ve sicaklik/nem duzeltmesi gerekir.
-    """
-    return round((voltage / MQ135_FULL_SCALE_VOLTS) * 100, 1)
+
+class DeviceReadError(Exception):
+    """Hangi cihazin okunamadigini tasiyan hata (`bme280` ya da `ads1115`)."""
+
+    def __init__(self, device_id, original):
+        super().__init__(f"{device_id}: {original}")
+        self.device_id = device_id
 
 
 class SensorHardware:
@@ -66,8 +80,15 @@ class SensorHardware:
             raise
 
     def read(self):
-        sample = self._bme280.sample(self._bus, BME280_ADDRESS, self._calibration)
-        voltage = self._channel.voltage
+        try:
+            sample = self._bme280.sample(self._bus, BME280_ADDRESS, self._calibration)
+        except Exception as exc:
+            raise DeviceReadError("bme280", exc) from exc
+
+        try:
+            voltage = self._channel.voltage
+        except Exception as exc:
+            raise DeviceReadError("ads1115", exc) from exc
 
         return {
             "temp": round(sample.temperature, 1),
@@ -129,21 +150,52 @@ class SensorManager:
         self._last_open_error = None
         # Panelden degistirilebilir; baslangicta .env degeri gecerlidir.
         self._read_interval = SENSOR_READ_INTERVAL
+        # Temiz havada olculen MQ135 gerilimi (None = kalibre degil).
+        self._clean_voltage = None
+
+        # Donanim durum raporu
+        self._last_gas_voltage = None
+        self._device_errors = {}
+        self._open_failed = False
+        self._system_devices = []
+        self._system_read_at = 0.0
+        self._last_report = None
+
+        # Uyku bekleyisini durdurma ya da kalibrasyon istegiyle bolmek icin.
+        self._wake = threading.Event()
+        self._calibration_requested = threading.Event()
 
         self.conn.on("settings_changed", self._handle_settings)
-        self.conn.on_connect(self._subscribe_settings)
+        self.conn.on("mq135_calibrate", self._handle_calibrate_request)
+        self.conn.on_connect(self._on_backend_connected)
 
-    def _subscribe_settings(self):
+    def _on_backend_connected(self):
         self.conn.emit("settings_subscribe")
+        self._publish_hardware_status(force=True)
+
+    def _handle_calibrate_request(self, _payload=None):
+        log.info("MQ135 kalibrasyon istegi alindi.")
+        self._calibration_requested.set()
+        self._wake.set()
 
     def _handle_settings(self, payload):
         """Panelden degistirilen okuma araligini uygular (null = .env degeri)."""
-        raw = payload.get("sensorIntervalSeconds") if isinstance(payload, dict) else None
-        interval = coerce_number(raw, SENSOR_READ_INTERVAL, SENSOR_INTERVAL_RANGE)
+        data = payload if isinstance(payload, dict) else {}
 
+        interval = coerce_number(
+            data.get("sensorIntervalSeconds"), SENSOR_READ_INTERVAL, SENSOR_INTERVAL_RANGE
+        )
         if interval != self._read_interval:
             self._read_interval = interval
             log.info("Okuma araligi guncellendi: %.0f sn", interval)
+
+        clean = coerce_number(data.get("mq135CleanVoltage"), None, MQ135_CLEAN_VOLTAGE_RANGE)
+        if clean != self._clean_voltage:
+            self._clean_voltage = clean
+            log.info(
+                "MQ135 kalibrasyonu: %s",
+                f"temiz hava {clean:.3f} V" if clean is not None else "yok (eski olcek)",
+            )
 
     def start(self):
         self._stop_event.clear()
@@ -160,18 +212,27 @@ class SensorManager:
         while not self._stop_event.is_set():
             if not opened:
                 opened = self._try_open()
+                self._open_failed = not opened
+                self._publish_hardware_status()
                 if not opened:
                     self._stop_event.wait(SENSOR_REINIT_DELAY)
                     continue
+
+            if self._calibration_requested.is_set():
+                self._calibration_requested.clear()
+                self._run_calibration()
 
             try:
                 reading = self._hardware.read()
             except Exception as exc:
                 consecutive_errors += 1
+                failed = getattr(exc, "device_id", "bme280")
+                self._device_errors[failed] = str(exc)
                 log.warning(
                     "Okuma hatasi (%d/%d): %s",
                     consecutive_errors, SENSOR_MAX_CONSECUTIVE_ERRORS, exc,
                 )
+                self._publish_hardware_status()
                 if consecutive_errors >= SENSOR_MAX_CONSECUTIVE_ERRORS:
                     log.error("Art arda okuma hatasi; I2C yeniden acilacak.")
                     self._hardware.close()
@@ -183,10 +244,17 @@ class SensorManager:
                 if consecutive_errors:
                     log.info("Sensor okumasi duzeldi.")
                 consecutive_errors = 0
+                self._device_errors.clear()
+                self._last_gas_voltage = reading["gas_voltage"]
+                reading["air_quality"] = mq135.air_quality(
+                    reading["gas_voltage"], self._clean_voltage, MQ135_VCC_VOLTS
+                )
                 self._warn_if_gas_signal_dead(reading["gas_voltage"])
                 self.conn.emit("sensor_update", reading)
+                self._publish_hardware_status()
 
-            self._stop_event.wait(self._read_interval)
+            self._wake.wait(self._read_interval)
+            self._wake.clear()
 
     def _try_open(self):
         try:
@@ -207,8 +275,85 @@ class SensorManager:
             self._last_open_error = message
         return False
 
+    def _run_calibration(self):
+        """Temiz havada ardisik olcumlerin ortancasini kalibrasyon gerilimi olarak bildirir."""
+        samples = []
+        for _ in range(_CALIBRATION_SAMPLES):
+            if self._stop_event.is_set():
+                return
+            try:
+                samples.append(self._hardware.read()["gas_voltage"])
+            except Exception as exc:
+                log.warning("Kalibrasyon olcumu basarisiz: %s", exc)
+            self._stop_event.wait(_CALIBRATION_SPACING_SECONDS)
+
+        if len(samples) < _CALIBRATION_SAMPLES // 2:
+            log.error("MQ135 kalibrasyonu iptal: yeterli olcum alinamadi.")
+            return
+
+        spread = max(samples) - min(samples)
+        clean = statistics.median(samples)
+        lower, upper = MQ135_CLEAN_VOLTAGE_RANGE
+        if spread > _MAX_CALIBRATION_SPREAD_VOLTS or not lower <= clean <= upper:
+            log.error(
+                "MQ135 kalibrasyonu iptal: olcumler kararsiz (yayilim %.2f V, ortanca %.2f V). "
+                "Sensor isinmamis ya da hava degisken olabilir.",
+                spread, clean,
+            )
+            return
+
+        log.info("MQ135 kalibrasyonu tamam: temiz hava %.3f V", clean)
+        self.conn.emit("mq135_calibrated", {"cleanVoltage": round(clean, 3)})
+
+    def _publish_hardware_status(self, force=False):
+        """Cihaz saglik raporunu degistiyse (ya da `force` ise) backend'e gonderir."""
+        now = time.monotonic()
+        if now - self._system_read_at >= _SYSTEM_HEALTH_INTERVAL_SECONDS:
+            self._system_devices = read_system_devices()
+            self._system_read_at = now
+
+        devices = [*self._sensor_devices(), *self._system_devices]
+        if not force and devices == self._last_report:
+            return
+
+        self._last_report = devices
+        self.conn.emit("hardware_status", {"devices": devices})
+
+    def _sensor_devices(self):
+        if self._open_failed:
+            detail = self._last_open_error or "I2C acilamadi"
+            return [
+                device("bme280", "BME280 (sicaklik/nem/basinc)", ERROR, detail),
+                device("ads1115", "ADS1115 (analog donusturucu)", ERROR, detail),
+                device("mq135", "MQ135 gaz sensoru", UNKNOWN, "ADS1115 okunamiyor"),
+            ]
+
+        devices = []
+        for device_id, name in (("bme280", "BME280 (sicaklik/nem/basinc)"),
+                                ("ads1115", "ADS1115 (analog donusturucu)")):
+            if device_id in self._device_errors:
+                devices.append(device(device_id, name, ERROR, self._device_errors[device_id]))
+            elif self._last_report is None and self._last_gas_voltage is None:
+                devices.append(device(device_id, name, UNKNOWN, "Henuz olculmedi"))
+            else:
+                devices.append(device(device_id, name, OK, "Yanit veriyor"))
+
+        if self._last_gas_voltage is None:
+            devices.append(device("mq135", "MQ135 gaz sensoru", UNKNOWN, "Henuz olculmedi"))
+        elif "ads1115" in self._device_errors:
+            devices.append(device("mq135", "MQ135 gaz sensoru", UNKNOWN, "ADS1115 okunamiyor"))
+        else:
+            devices.append(
+                mq135.describe_signal(
+                    self._last_gas_voltage,
+                    supply_volts=ADS1115_SUPPLY_VOLTS,
+                    calibrated=self._clean_voltage is not None,
+                )
+            )
+        return devices
+
     def _warn_if_gas_signal_dead(self, voltage):
-        if voltage <= _MQ135_DEAD_SIGNAL_VOLTS:
+        if voltage <= mq135.DEAD_SIGNAL_VOLTS:
             if not self._dead_signal_logged:
                 log.warning(
                     "MQ135 sinyali ~0 V. Sensor beslemesi (VCC/GND) ve AO kablosu "
@@ -220,6 +365,7 @@ class SensorManager:
 
     def stop(self):
         self._stop_event.set()
+        self._wake.set()
 
         if self._thread is not None and self._thread.is_alive():
             self._thread.join(timeout=2.0)

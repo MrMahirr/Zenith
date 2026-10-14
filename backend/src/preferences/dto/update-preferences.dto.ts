@@ -29,4 +29,23 @@ export class UpdatePreferencesDto {
   @MaxLength(PREFERENCE_LIMITS.weatherCity.maxLength)
   @Matches(CITY_PATTERN, { message: 'weatherCity yalnızca harf, boşluk ve . , \' - içerebilir' })
   weatherCity?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(PREFERENCE_LIMITS.displayBrightness.min)
+  @Max(PREFERENCE_LIMITS.displayBrightness.max)
+  displayBrightness?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(PREFERENCE_LIMITS.displayNightBrightness.min)
+  @Max(PREFERENCE_LIMITS.displayNightBrightness.max)
+  displayNightBrightness?: number | null;
+
+  /** Genellikle kalibrasyon akışıyla yazılır; elle `null` ile silinebilir. */
+  @IsOptional()
+  @IsNumber()
+  @Min(PREFERENCE_LIMITS.mq135CleanVoltage.min)
+  @Max(PREFERENCE_LIMITS.mq135CleanVoltage.max)
+  mq135CleanVoltage?: number | null;
 }

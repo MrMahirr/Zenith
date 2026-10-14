@@ -17,6 +17,11 @@ export class ServiceRegistry {
     this.socketToService.delete(socketId);
   }
 
+  /** Bu soketin hangi AI servisine ait olduğu (el sıkışmada bildirilen ad). */
+  serviceOf(socketId: string): ServiceName | null {
+    return this.socketToService.get(socketId) ?? null;
+  }
+
   /** Her bilinen servis için bağlı mı bilgisi. */
   snapshot(): Record<ServiceName, boolean> {
     const connected = new Set(this.socketToService.values());

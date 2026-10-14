@@ -12,10 +12,13 @@ from config import (
     LED_DMA,
     LED_FREQ_HZ,
     LED_INVERT,
+    LED_MAX_CURRENT_MA,
     LED_PIN,
 )
 from connection_manager import ConnectionManager
+from hardware_report import ERROR, OK, WARN, device
 from led_color import BLACK, clamp_brightness, parse_duration_seconds, parse_hex_color
+from led_power import limit_brightness
 
 try:
     from rpi_ws281x import Color, PixelStrip
@@ -56,21 +59,27 @@ class LEDController:
         self._brightness = LED_BRIGHTNESS
         self._expires_at = 0.0  # time.monotonic() cinsinden; 0 = sure siniri yok
         self._last_write_error = None
+        # Donanim durum raporu
+        self._init_error = None
+        self._effective_brightness = self._brightness
+        self._last_report = None
 
         self._initialize_hardware()
 
         self.conn.on("led_command", self._handle_command)
         self.conn.on("led_state_sync", self._handle_state_sync)
-        self.conn.on_connect(self._request_state)
+        self.conn.on_connect(self._on_backend_connected)
 
     # --- Donanim -------------------------------------------------------------
 
     def _initialize_hardware(self):
         if not LIBRARY_AVAILABLE:
+            self._init_error = "rpi_ws281x kutuphanesi yok"
             log.warning("rpi_ws281x kutuphanesi bulunamadi; fiziksel LED surulmeyecek.")
             return
 
         if hasattr(os, "geteuid") and os.geteuid() != 0:
+            self._init_error = "Root yetkisi yok (/dev/mem erisimi gerekir)"
             log.warning("Root yetkisi yok (/dev/mem erisimi gerekir); fiziksel LED surulmeyecek.")
             return
 
@@ -86,6 +95,7 @@ class LEDController:
             )
             strip.begin()
         except Exception as exc:
+            self._init_error = f"{exc.__class__.__name__}: {exc}"
             log.error(
                 "Donanim baslatilamadi: %s: %s (ses cikisinin PWM ile cakismasi "
                 "icin config.txt'te 'dtparam=audio=off' olmali)",
@@ -102,9 +112,13 @@ class LEDController:
         if self._strip is None:
             return
 
+        # Guc butcesi: yuksek parlaklik besleme gerilimini dusurur ve Pi'yi kisar.
+        effective = limit_brightness(self._color, self._brightness, LED_COUNT, LED_MAX_CURRENT_MA)
+        self._effective_brightness = effective
+
         try:
             packed = Color(*self._color)
-            self._strip.setBrightness(self._brightness)
+            self._strip.setBrightness(effective)
             for index in range(self._strip.numPixels()):
                 self._strip.setPixelColor(index, packed)
             self._strip.show()
@@ -114,6 +128,37 @@ class LEDController:
             if message != self._last_write_error:  # ayni hatayi tekrar tekrar basma
                 log.error("Donanim yazma hatasi: %s", message)
                 self._last_write_error = message
+
+        self._publish_hardware_status()
+
+    def _describe_hardware(self):
+        if not self.has_hardware:
+            return device("ws281x", "LED serit (WS2812B)", ERROR,
+                          self._init_error or "Donanim baslatilamadi")
+        if self._last_write_error:
+            return device("ws281x", "LED serit (WS2812B)", ERROR, self._last_write_error)
+
+        base = f"GPIO{LED_PIN}, {LED_COUNT} LED. Fiziksel baglanti yazilimla dogrulanamaz."
+        if self._effective_brightness < self._brightness:
+            percent = round(self._effective_brightness / 255 * 100)
+            return device(
+                "ws281x", "LED serit (WS2812B)", WARN,
+                f"Guc siniri ({LED_MAX_CURRENT_MA} mA) nedeniyle parlaklik %{percent}'e dusuruldu. {base}",
+            )
+        return device("ws281x", "LED serit (WS2812B)", OK, base)
+
+    def _publish_hardware_status(self, force=False):
+        """Durum degistiyse (ya da `force` ise) backend'e bildirir."""
+        report = [self._describe_hardware()]
+        if not force and report == self._last_report:
+            return
+
+        self._last_report = report
+        self.conn.emit("hardware_status", {"devices": report})
+
+    def _on_backend_connected(self):
+        self._request_state()
+        self._publish_hardware_status(force=True)
 
     # --- Backend olaylari ----------------------------------------------------
 

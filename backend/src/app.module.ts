@@ -26,6 +26,8 @@ import { CameraModule } from './camera/camera.module';
 import { SettingsModule } from './settings/settings.module';
 import { StatusModule } from './status/status.module';
 import { PreferencesModule } from './preferences/preferences.module';
+import { HardwareModule } from './hardware/hardware.module';
+import { DisplayModule } from './display/display.module';
 
 @Module({
   controllers: [AppController],
@@ -79,6 +81,8 @@ import { PreferencesModule } from './preferences/preferences.module';
     CameraModule,
     StatusModule,
     PreferencesModule,
+    DisplayModule,
+    HardwareModule,
   ],
 })
 export class AppModule {}

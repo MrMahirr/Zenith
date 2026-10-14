@@ -9,6 +9,7 @@ import { LedModule } from '../led/led.module';
 import { CameraModule } from '../camera/camera.module';
 import { StatusModule } from '../status/status.module';
 import { PreferencesModule } from '../preferences/preferences.module';
+import { HardwareModule } from '../hardware/hardware.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { PreferencesModule } from '../preferences/preferences.module';
     CameraModule,
     StatusModule,
     PreferencesModule,
+    HardwareModule,
   ],
   providers: [ZenithGateway],
   exports: [ZenithGateway],

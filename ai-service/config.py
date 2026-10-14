@@ -141,6 +141,12 @@ SENSOR_READ_INTERVAL = env_float("SENSOR_READ_INTERVAL", 15.0, minimum=1.0)
 SENSOR_MAX_CONSECUTIVE_ERRORS = env_int("SENSOR_MAX_CONSECUTIVE_ERRORS", 3, minimum=1)
 SENSOR_REINIT_DELAY = env_float("SENSOR_REINIT_DELAY", 10.0, minimum=1.0)
 
+# --- MQ135 / ADS1115 ---
+# ADS1115'in besleme gerilimi; MQ135 AO bunun +0.3 V'unu asarsa cip zarar gorur.
+ADS1115_SUPPLY_VOLTS = env_float("ADS1115_SUPPLY_VOLTS", 3.3, minimum=1.8, maximum=5.5)
+# MQ135 modulunun besleme gerilimi (goreli indeks hesabinda kullanilir).
+MQ135_VCC_VOLTS = env_float("MQ135_VCC_VOLTS", 5.0, minimum=3.0, maximum=6.0)
+
 # --- LED ---------------------------------------------------------------------
 LED_COUNT = env_int("LED_COUNT", 60, minimum=1)
 LED_PIN = env_int("LED_PIN", 18, minimum=0)
@@ -149,6 +155,10 @@ LED_DMA = env_int("LED_DMA", 5, minimum=0)
 LED_BRIGHTNESS = env_int("LED_BRIGHTNESS", 128, minimum=0, maximum=255)
 LED_INVERT = False
 LED_CHANNEL = 0
+# Seridin cekebilecegi en yuksek akim (mA); asilirsa parlaklik otomatik kisilir.
+# Pi'nin 5V hattindan beslenen kurulumlarda dusuk gerilimi onler. 0 = sinirsiz
+# (serit ayri bir 5V kaynaktan besleniyorsa).
+LED_MAX_CURRENT_MA = env_int("LED_MAX_CURRENT_MA", 1000, minimum=0)
 
 # --- NFC ---------------------------------------------------------------------
 # mfrc522 kutuphanesi kart yokken her sorguda ~2000 SPI okumasi yapar (~90 ms);

@@ -135,6 +135,14 @@
   flex-direction: column;
   gap: 12px;
   width: 240px;
+  /* 800x480 ekranda kartlar sığmaz; sütun kendi içinde kaydırılır. */
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.camera-page__info > * {
+  flex: none;
 }
 
 .camera-page__info-card {

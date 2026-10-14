@@ -17,6 +17,8 @@ import { NfcService } from '../nfc/nfc.service';
 import { LedService } from '../led/led.service';
 import { CameraService } from '../camera/camera.service';
 import { PreferencesService } from '../preferences/preferences.service';
+import { HardwareService } from '../hardware/hardware.service';
+import { parseHardwareDevices } from '../hardware/hardware-payload';
 import { ServiceRegistry } from '../status/service-registry.service';
 import { LedCommand, WS } from './events';
 import {
@@ -59,6 +61,7 @@ export class ZenithGateway
 
   private cameraConfigSubscription?: Subscription;
   private preferencesSubscription?: Subscription;
+  private hardwareSubscriptions: Subscription[] = [];
   private cameraStatus: { connected: boolean } | null = null;
 
   constructor(
@@ -70,6 +73,7 @@ export class ZenithGateway
     private readonly cameraService: CameraService,
     private readonly serviceRegistry: ServiceRegistry,
     private readonly preferences: PreferencesService,
+    private readonly hardware: HardwareService,
   ) {}
 
   afterInit() {
@@ -82,17 +86,30 @@ export class ZenithGateway
     this.preferencesSubscription = this.preferences.changed$.subscribe((prefs) =>
       this.server.to(SETTINGS_ROOM).emit(WS.SETTINGS_CHANGED, this.toServiceSettings(prefs)),
     );
+
+    this.hardwareSubscriptions = [
+      // Cihaz durumu değişince tüm arayüzlere güncel görüntüyü yayınla.
+      this.hardware.changed$.subscribe(() =>
+        this.server.emit(WS.HARDWARE_STATUS, this.hardware.snapshot()),
+      ),
+      // MQ135 kalibrasyon isteğini yalnızca sensör servisine ilet.
+      this.hardware.calibrateRequested$.subscribe(() =>
+        this.server.to(SETTINGS_ROOM).emit(WS.MQ135_CALIBRATE),
+      ),
+    ];
   }
 
   onModuleDestroy() {
     this.cameraConfigSubscription?.unsubscribe();
     this.preferencesSubscription?.unsubscribe();
+    this.hardwareSubscriptions.forEach((subscription) => subscription.unsubscribe());
   }
 
   handleConnection(client: Socket) {
     const service = parseServiceName(client.handshake.auth?.service);
     if (service) {
       this.serviceRegistry.register(client.id, service);
+      this.hardware.notifyConnectionChanged();
     }
     this.logger.log(`[+] Connected: ${client.id}${service ? ` (${service})` : ''}`);
 
@@ -106,8 +123,13 @@ export class ZenithGateway
   }
 
   handleDisconnect(client: Socket) {
+    const wasService = this.serviceRegistry.serviceOf(client.id);
     this.serviceRegistry.unregister(client.id);
     this.logger.log(`[-] Disconnected: ${client.id}`);
+
+    if (wasService) {
+      this.hardware.notifyConnectionChanged();
+    }
   }
 
   // ──────────── Sensör ────────────
@@ -305,16 +327,48 @@ export class ZenithGateway
     );
   }
 
+  // ──────────── Donanım ────────────
+
+  /** AI servislerinin cihaz sağlık raporu. Servis kimliği el sıkışmadan alınır. */
+  @SubscribeMessage(WS.HARDWARE_STATUS)
+  handleHardwareStatus(client: Socket, payload: unknown) {
+    const service = this.serviceRegistry.serviceOf(client.id);
+    const devices = parseHardwareDevices(payload);
+
+    if (!service || !devices) {
+      return;
+    }
+    this.hardware.report(service, devices);
+  }
+
+  /** Sensör servisinin kalibrasyon sonucu: temiz hava gerilimi. */
+  @SubscribeMessage(WS.MQ135_CALIBRATED)
+  async handleMq135Calibrated(client: Socket, payload: { cleanVoltage?: unknown }) {
+    const voltage = payload?.cleanVoltage;
+    if (this.serviceRegistry.serviceOf(client.id) !== 'sensor' || typeof voltage !== 'number') {
+      return;
+    }
+
+    try {
+      await this.preferences.update({ mq135CleanVoltage: voltage });
+      this.logger.log(`MQ135 kalibre edildi: temiz hava ${voltage} V`);
+    } catch (error) {
+      this.logger.error(`MQ135 kalibrasyonu kaydedilemedi: ${error}`);
+    }
+  }
+
   // ──────────── Yardımcılar ────────────
 
   /** AI servislerini ilgilendiren tercihler (`null` = servisin kendi varsayılanı). */
   private toServiceSettings(prefs: {
     postureThreshold: number | null;
     sensorIntervalSeconds: number | null;
+    mq135CleanVoltage: number | null;
   }) {
     return {
       postureThreshold: prefs.postureThreshold,
       sensorIntervalSeconds: prefs.sensorIntervalSeconds,
+      mq135CleanVoltage: prefs.mq135CleanVoltage,
     };
   }
 

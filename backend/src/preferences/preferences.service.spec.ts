@@ -6,6 +6,15 @@ import { SettingsService } from '../settings/settings.service';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 import { Preferences, PreferencesService } from './preferences.service';
 
+const EMPTY: Preferences = {
+  postureThreshold: null,
+  sensorIntervalSeconds: null,
+  weatherCity: null,
+  displayBrightness: null,
+  displayNightBrightness: null,
+  mq135CleanVoltage: null,
+};
+
 class InMemorySettings {
   readonly store = new Map<string, string>();
 
@@ -33,11 +42,7 @@ describe('PreferencesService', () => {
     const { service } = create({ WEATHER_CITY: 'Ankara' });
     const view = await service.getView();
 
-    expect(view.values).toEqual({
-      postureThreshold: null,
-      sensorIntervalSeconds: null,
-      weatherCity: null,
-    });
+    expect(view.values).toEqual(EMPTY);
     expect(view.defaults).toMatchObject({ postureThreshold: 0.15, weatherCity: 'Ankara' });
     expect(view.limits.sensorIntervalSeconds).toEqual({ min: 5, max: 300 });
   });
@@ -49,9 +54,9 @@ describe('PreferencesService', () => {
     const afterReset = await service.update({ weatherCity: null });
 
     expect(afterReset).toEqual({
+      ...EMPTY,
       postureThreshold: 0.2,
       sensorIntervalSeconds: 30,
-      weatherCity: null,
     });
   });
 
@@ -74,17 +79,37 @@ describe('PreferencesService', () => {
     expect(await service.getWeatherCity()).toBe('Antalya');
   });
 
+  it('stores display brightness and the MQ135 calibration', async () => {
+    const { service } = create();
+    const saved = await service.update({
+      displayBrightness: 60,
+      displayNightBrightness: 15,
+      mq135CleanVoltage: 0.51,
+    });
+
+    expect(saved).toMatchObject({
+      displayBrightness: 60,
+      displayNightBrightness: 15,
+      mq135CleanVoltage: 0.51,
+    });
+  });
+
+  it('parse drops out-of-range display and calibration values', () => {
+    const parsed = PreferencesService.parse(
+      '{"displayBrightness":1,"displayNightBrightness":500,"mq135CleanVoltage":9}',
+    );
+    expect(parsed.displayBrightness).toBeNull();
+    expect(parsed.displayNightBrightness).toBeNull();
+    expect(parsed.mq135CleanVoltage).toBeNull();
+  });
+
   it('parse drops invalid stored fields', () => {
     expect(
       PreferencesService.parse(
         '{"postureThreshold":9,"sensorIntervalSeconds":2.5,"weatherCity":"   "}',
       ),
-    ).toEqual({ postureThreshold: null, sensorIntervalSeconds: null, weatherCity: null });
-    expect(PreferencesService.parse('garbage')).toEqual({
-      postureThreshold: null,
-      sensorIntervalSeconds: null,
-      weatherCity: null,
-    });
+    ).toEqual(EMPTY);
+    expect(PreferencesService.parse('garbage')).toEqual(EMPTY);
   });
 });
 
@@ -102,6 +127,15 @@ describe('UpdatePreferencesDto', () => {
     expect(await errorsFor({ postureThreshold: 0.01 })).toContain('postureThreshold');
     expect(await errorsFor({ sensorIntervalSeconds: 1 })).toContain('sensorIntervalSeconds');
     expect(await errorsFor({ sensorIntervalSeconds: 12.5 })).toContain('sensorIntervalSeconds');
+  });
+
+  it('validates display brightness and calibration ranges', async () => {
+    expect(await errorsFor({ displayBrightness: 50, displayNightBrightness: 10 })).toHaveLength(0);
+    expect(await errorsFor({ displayBrightness: 0 })).toContain('displayBrightness');
+    expect(await errorsFor({ displayBrightness: 101 })).toContain('displayBrightness');
+    expect(await errorsFor({ displayNightBrightness: 2 })).toContain('displayNightBrightness');
+    expect(await errorsFor({ mq135CleanVoltage: 0.5 })).toHaveLength(0);
+    expect(await errorsFor({ mq135CleanVoltage: 7 })).toContain('mq135CleanVoltage');
   });
 
   it('accepts Turkish city names and rejects URL/query injection', async () => {
