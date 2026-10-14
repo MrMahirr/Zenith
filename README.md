@@ -73,6 +73,18 @@ scripts/deploy.sh --ref <sha>      # belirli bir sürüme geç (geri alma)
 
 Akış: ön kontrol → veritabanı yedeği → git güncelle → değiştiyse bağımlılıkları kur → testler → derleme → servisleri yeniden başlat → sağlık kontrolü. Sağlık kontrolü başarısız olursa betik önceki sürüme dönmek için gereken komutu yazdırır. Servisler yaklaşık 20–30 saniye boyunca yeniden başlar.
 
+## Veritabanı
+
+SQLite dosyası `backend/zenith.sqlite` **git'te tutulmaz** (canlı veridir). Şema TypeORM migration'larıyla (`backend/src/database/migrations`) yönetilir: backend açılırken bekleyen migration'lar otomatik uygulanır, veritabanı yoksa sıfırdan kurulur. Yeni bir tablo/sütun eklerken yeni bir migration yazıp `migrations/index.ts` listesinin sonuna ekleyin. WAL modu açıktır (`*.sqlite-wal`/`-shm` dosyaları normaldir).
+
+> Eski sürümden güncellerken `scripts/deploy.sh` canlı veritabanını otomatik korur. Pi'de elle `git pull` yapılırsa git, dosyayı ezmemek için işlemi reddeder; `scripts/deploy.sh` kullanın.
+
+## LED, ortam ışığı ve modlar
+
+LED durumu (manuel/otomatik, renk, parlaklık) ve aktif mod yeniden başlatmada korunur. **Ortam ışığı varsayılan olarak kapalıdır**: kapalıyken mod değişimi LED'i 5 saniye o modun renginde yakıp söndürür; **LED Kontrol** sayfasından "Ortam ışığı" açılırsa aktif modun rengi kalıcı yanar (Serbest modda sönük). Duruş uyarısı kırmızıdır, düzelince kısa yeşil gösterilir ve taban renge (ortam ışığı ya da kapalı) dönülür. LED'i elle yönetiyorsanız mod değişimi rengi ezmez.
+
+Mod tanımları tek kaynaktan gelir: `GET /api/modes/config`. `GET /api/modes/stats` her modda geçirilen **süreyi (dakika)** döndürür.
+
 ## Veritabanı yedeği
 
 Günlük yedek (03:30, cihaz kapalıysa açılışta) `systemd` kullanıcı zamanlayıcısıyla alınır, son 7 kopya `~/zenith-backups/` altında saklanır.
@@ -137,7 +149,7 @@ Masaüstü oturumu açılınca `zenith-kiosk.desktop` → `kiosk.sh` çalışır
 ```bash
 pm2 ls                                  # servis durumu
 pm2 logs zenith-camera --lines 50       # servis logu
-curl localhost:3000/api/health          # backend sağlığı
+curl localhost:3000/api/health          # backend + veritabanı + bağlı servisler
 sudo i2cdetect -y 3                     # BME280 (0x76) + ADS1115 (0x48)
 systemctl is-enabled pm2-root           # "disabled" olmalı (çift servis sorununu önler)
 ```

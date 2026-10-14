@@ -1,9 +1,9 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
-import { DataSource } from 'typeorm';
+import { MIGRATIONS } from './database/migrations';
 
 // Entities
 import { SensorReading } from './database/entities/sensor-reading.entity';
@@ -24,6 +24,7 @@ import { NfcModule } from './nfc/nfc.module';
 import { LedModule } from './led/led.module';
 import { CameraModule } from './camera/camera.module';
 import { SettingsModule } from './settings/settings.module';
+import { StatusModule } from './status/status.module';
 
 @Module({
   controllers: [AppController],
@@ -46,7 +47,20 @@ import { SettingsModule } from './settings/settings.module';
         SensorMinuteSummary,
         PostureMinuteSummary,
       ],
-      synchronize: false, // RPi performansı ve boot süresi için senkronizasyon devre dışı bırakıldı
+      // Şema değişiklikleri migration'larla yönetilir (src/database/migrations).
+      // Açılışta bekleyen migration'lar otomatik uygulanır; şema yoksa kurulur.
+      synchronize: false,
+      migrations: MIGRATIONS,
+      migrationsRun: true,
+      // WAL: eşzamanlı okuma/yazma ve daha az fsync (SD kart ömrü). Bağlantı
+      // açılırken uygulanır; sonradan bir transaction içinde değiştirilemez.
+      enableWAL: true,
+      prepareDatabase: (db: { pragma(source: string): unknown }) => {
+        db.pragma('synchronous = NORMAL'); // WAL ile güvenli, daha az disk beklemesi
+        db.pragma('cache_size = -8000'); // 8 MB önbellek
+        db.pragma('mmap_size = 67108864'); // 64 MB memory-mapped I/O
+        db.pragma('temp_store = MEMORY');
+      },
     }),
 
     // Zamanlayıcı (hava durumu güncellemesi vb.)
@@ -62,26 +76,7 @@ import { SettingsModule } from './settings/settings.module';
     LedModule,
     SettingsModule,
     CameraModule,
+    StatusModule,
   ],
 })
-export class AppModule implements OnModuleInit {
-  constructor(private readonly dataSource: DataSource) {}
-
-  async onModuleInit() {
-    try {
-      // SQLite performans pragmalarını uygulayarak okuma/yazma hızını katlıyoruz.
-      // 1. WAL (Write-Ahead Logging) modunu açarak eş zamanlı okuma/yazma sağlıyoruz.
-      await this.dataSource.query('PRAGMA journal_mode = WAL;');
-      // 2. synchronous = NORMAL ile her disk yazımında disk kafasının fiziksel beklemesini önlüyoruz (Crash risk minimal).
-      await this.dataSource.query('PRAGMA synchronous = NORMAL;');
-      // 3. Cache boyutunu 8MB yapıyoruz (Varsayılan 2MB idi).
-      await this.dataSource.query('PRAGMA cache_size = -8000;');
-      // 4. Memory-mapped I/O boyutunu 64MB yaparak doğrudan RAM eşleşmesi sağlıyoruz.
-      await this.dataSource.query('PRAGMA mmap_size = 67108864;');
-      // 5. Geçici tabloların disk yerine RAM üzerinde oluşturulmasını sağlıyoruz.
-      await this.dataSource.query('PRAGMA temp_store = MEMORY;');
-    } catch (err) {
-      console.error('[SQLite] Performans pragmaları uygulanamadı:', err);
-    }
-  }
-}
+export class AppModule {}

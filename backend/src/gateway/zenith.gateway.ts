@@ -12,12 +12,32 @@ import { Subscription } from 'rxjs';
 import { SensorService } from '../sensor/sensor.service';
 import { PostureService } from '../posture/posture.service';
 import { ModeService } from '../mode/mode.service';
+import { ModeName, isModeName } from '../mode/mode.constants';
 import { NfcService } from '../nfc/nfc.service';
 import { LedService } from '../led/led.service';
 import { CameraService } from '../camera/camera.service';
+import { ServiceRegistry } from '../status/service-registry.service';
+import { LedCommand, WS } from './events';
+import {
+  parseAmbientPayload,
+  parseBrightnessPayload,
+  parseChipUid,
+  parseLedManualPayload,
+  parsePosturePayload,
+  parseSensorPayload,
+  parseServiceName,
+} from './payload-guards';
 
 /** Kamera adresi değişikliklerini yalnızca kamera servisine ileten oda. */
 const CAMERA_CONFIG_ROOM = 'camera-config';
+
+/** Mod değişiminde (ortam ışığı kapalıyken) LED'in yanıp sönme süresi. */
+const MODE_FLASH_MS = 5000;
+/** Duruş düzeldiğinde yeşil uyarının süresi. */
+const POSTURE_OK_FLASH_MS = 2000;
+
+const POSTURE_ALERT_COLOR = '#EF4444';
+const POSTURE_OK_COLOR = '#10B981';
 
 @WebSocketGateway({
   cors: {
@@ -27,7 +47,7 @@ const CAMERA_CONFIG_ROOM = 'camera-config';
 export class ZenithGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
 {
-  private readonly postureLedModes = new Set(['CODING', 'FOCUS', 'RELAX', 'MEETING']);
+  private readonly postureLedModes = new Set<ModeName>(['CODING', 'FOCUS', 'RELAX', 'MEETING']);
 
   @WebSocketServer()
   server: Server;
@@ -44,13 +64,14 @@ export class ZenithGateway
     private readonly nfcService: NfcService,
     private readonly ledService: LedService,
     private readonly cameraService: CameraService,
+    private readonly serviceRegistry: ServiceRegistry,
   ) {}
 
   afterInit() {
     this.logger.log('Zenith WebSocket Gateway started');
 
-    this.cameraConfigSubscription = this.cameraService.configChanged$.subscribe(
-      (config) => this.server.to(CAMERA_CONFIG_ROOM).emit('camera_config', config),
+    this.cameraConfigSubscription = this.cameraService.configChanged$.subscribe((config) =>
+      this.server.to(CAMERA_CONFIG_ROOM).emit(WS.CAMERA_CONFIG, config),
     );
   }
 
@@ -59,184 +80,268 @@ export class ZenithGateway
   }
 
   handleConnection(client: Socket) {
-    this.logger.log(`[+] Connected: ${client.id}`);
+    const service = parseServiceName(client.handshake.auth?.service);
+    if (service) {
+      this.serviceRegistry.register(client.id, service);
+    }
+    this.logger.log(`[+] Connected: ${client.id}${service ? ` (${service})` : ''}`);
+
     const currentMode = this.modeService.getCurrentMode();
-    client.emit('mode_changed', currentMode);
+    client.emit(WS.MODE_CHANGED, currentMode);
     this.emitPostureAvailability(currentMode.mode, client);
 
     if (this.cameraStatus) {
-      client.emit('camera_status', this.cameraStatus);
+      client.emit(WS.CAMERA_STATUS, this.cameraStatus);
     }
   }
 
   handleDisconnect(client: Socket) {
+    this.serviceRegistry.unregister(client.id);
     this.logger.log(`[-] Disconnected: ${client.id}`);
   }
 
-  @SubscribeMessage('sensor_update')
-  async handleSensorUpdate(
-    _client: Socket,
-    payload: {
-      temp: number;
-      humidity: number;
-      pressure: number;
-      air_quality: number;
-      gas_voltage: number;
-    },
-  ) {
-    await this.sensorService.saveReading(payload);
-    this.server.emit('dashboard_sensor_data', payload);
+  // ──────────── Sensör ────────────
+
+  @SubscribeMessage(WS.SENSOR_UPDATE)
+  async handleSensorUpdate(_client: Socket, payload: unknown) {
+    const reading = parseSensorPayload(payload);
+    if (!reading) {
+      this.logger.warn('Geçersiz sensor_update yükü yok sayıldı');
+      return;
+    }
+
+    await this.sensorService.saveReading(reading);
+    this.server.emit(WS.DASHBOARD_SENSOR_DATA, reading);
   }
 
-  // MJPEG Direkt Yayın (5001) mimarisine geçildiği için kamera_kare WS aktarımı kaldırılmıştır.
-  // Bu sayede NestJS backend işlemci ve RAM yükü dramatik şekilde sıfırlanmıştır.
+  // MJPEG doğrudan yayın (5001) mimarisine geçildiği için kare aktarımı WebSocket üzerinden yapılmaz.
 
-  @SubscribeMessage('postur_durumu')
-  async handlePostureDurumu(
-    _client: Socket,
-    payload: { kambur_mu: boolean; mesafe: number },
-  ) {
+  // ──────────── Postür ────────────
+
+  @SubscribeMessage(WS.POSTURE_STATUS)
+  async handlePostureStatus(_client: Socket, payload: unknown) {
+    const posture = parsePosturePayload(payload);
+    if (!posture) {
+      this.logger.warn('Geçersiz postur_durumu yükü yok sayıldı');
+      return;
+    }
+
     const currentMode = this.modeService.getCurrentMode().mode;
-
     if (currentMode === 'PASSIVE') {
       return;
     }
 
     const previousStatus = this.postureService.getCurrentStatus();
-    await this.postureService.saveEvent(payload);
+    await this.postureService.saveEvent(posture);
 
-    this.server.emit('posture_update', {
+    this.server.emit(WS.POSTURE_UPDATE, {
       isActive: true,
-      isSlouching: payload.kambur_mu,
-      distance: payload.mesafe,
+      isSlouching: posture.kambur_mu,
+      distance: posture.mesafe,
     });
 
     if (
       this.ledService.getState().mode === 'auto' &&
       this.postureLedModes.has(currentMode) &&
-      previousStatus.isSlouching !== payload.kambur_mu
+      previousStatus.isSlouching !== posture.kambur_mu
     ) {
-      this.server.emit('led_command', {
+      this.emitLedCommand({
         type: 'POSTURE',
-        color: payload.kambur_mu ? '#EF4444' : '#10B981',
-        duration: payload.kambur_mu ? 0 : 2000,
+        color: posture.kambur_mu ? POSTURE_ALERT_COLOR : POSTURE_OK_COLOR,
+        // Uyarı kalıcıdır; "düzeldi" kısa yeşil gösterir ve taban renge (ortam ışığı
+        // ya da kapalı) döner.
+        duration: posture.kambur_mu ? 0 : POSTURE_OK_FLASH_MS,
         brightness: this.ledService.getState().brightness,
       });
     }
   }
 
-  /** Kamera servisi bağlanınca abone olur ve güncel adresi alır. */
-  @SubscribeMessage('camera_config_subscribe')
-  async handleCameraConfigSubscribe(client: Socket) {
-    await client.join(CAMERA_CONFIG_ROOM);
-    client.emit('camera_config', { url: await this.cameraService.getUrl() });
-  }
+  // ──────────── LED ────────────
 
-  /** Kamera servisinin bağlantı durumu; adres içermez, tüm arayüzlere yayınlanır. */
-  @SubscribeMessage('camera_status')
-  handleCameraStatus(_client: Socket, payload: { connected?: unknown }) {
-    if (typeof payload?.connected !== 'boolean') {
+  @SubscribeMessage(WS.LED_MANUAL)
+  handleLedManual(_client: Socket, payload: unknown) {
+    const manual = parseLedManualPayload(payload);
+    if (!manual) {
+      this.logger.warn('Geçersiz led_manual yükü yok sayıldı');
       return;
     }
 
-    this.cameraStatus = { connected: payload.connected };
-    this.server.emit('camera_status', this.cameraStatus);
-  }
-
-  /** Arayüz açıldığında bilinen son kamera durumunu ister. */
-  @SubscribeMessage('camera_status_get')
-  handleCameraStatusGet(client: Socket) {
-    if (this.cameraStatus) {
-      client.emit('camera_status', this.cameraStatus);
-    }
-  }
-
-  @SubscribeMessage('led_manual')
-  handleLedManual(_client: Socket, payload: { color: string; brightness: number }) {
-    this.ledService.setManual(payload.color, payload.brightness);
-    this.server.emit('led_command', {
+    this.ledService.setManual(manual.color, manual.brightness);
+    this.emitLedCommand({
       type: 'MANUAL',
-      color: payload.color,
-      brightness: payload.brightness,
+      color: manual.color,
+      brightness: manual.brightness,
       duration: 0,
     });
-    this.server.emit('led_state_sync', this.ledService.getState());
+    this.emitLedSync();
   }
 
-  @SubscribeMessage('led_off')
+  @SubscribeMessage(WS.LED_OFF)
   handleLedOff() {
     this.ledService.turnOff();
-    this.server.emit('led_command', { type: 'MANUAL', color: '#000000', brightness: 0, duration: 0 });
-    this.server.emit('led_state_sync', this.ledService.getState());
+    this.emitLedCommand({ type: 'MANUAL', color: '#000000', brightness: 0, duration: 0 });
+    this.emitLedSync();
   }
 
-  @SubscribeMessage('led_auto')
+  @SubscribeMessage(WS.LED_AUTO)
   handleLedAuto() {
     this.ledService.setAuto();
-    this.server.emit('led_state_sync', this.ledService.getState());
+    this.emitLedSync();
   }
 
-  @SubscribeMessage('led_get_state')
+  @SubscribeMessage(WS.LED_GET_STATE)
   handleLedGetState(client: Socket) {
-    client.emit('led_state_sync', this.ledService.getState());
+    client.emit(WS.LED_STATE_SYNC, this.buildLedSync());
   }
 
-  @SubscribeMessage('led_set_brightness')
-  handleLedSetBrightness(_client: Socket, payload: { brightness: number }) {
-    this.ledService.setBrightness(payload.brightness);
-    const currentState = this.ledService.getState();
-    // Eger LED açıksa veya otomatikteyse doğrudan fiziksel donanıma da gönder,
-    // (python color gelmezse target_color'u hatırlamıyor, bu yüzden sadece led_state_sync ile state'i güncelliyoruz)
-    this.server.emit('led_state_sync', currentState);
-  }
-
-  @SubscribeMessage('nfc_chip_scanned')
-  async handleNfcChipScanned(
-    _client: Socket,
-    payload: { uid: string },
-  ) {
-    const { chip, isNew } = await this.nfcService.handleChipScan(payload.uid);
-    this.server.emit('nfc_chip_list_updated', { chip, isNew });
-
-    if (chip.isRegistered && chip.assignedMode) {
-      const result = await this.modeService.changeMode(chip.assignedMode);
-
-      if (result) {
-        this.server.emit('mode_changed', result);
-        this.emitPostureAvailability(result.mode);
-        this.server.emit('led_command', {
-          type: 'MODE_CHANGE',
-          color: result.config.color,
-          duration: 5000,
-          brightness: this.ledService.getState().brightness,
-        });
-      }
+  @SubscribeMessage(WS.LED_SET_BRIGHTNESS)
+  handleLedSetBrightness(_client: Socket, payload: unknown) {
+    const brightness = parseBrightnessPayload(payload);
+    if (brightness === null) {
+      this.logger.warn('Geçersiz led_set_brightness yükü yok sayıldı');
       return;
     }
 
-    this.server.emit('nfc_unknown_chip', {
+    this.ledService.setBrightness(brightness);
+    // ai-service parlaklığı led_state_sync üzerinden uygular.
+    this.emitLedSync();
+  }
+
+  /** Ortam ışığını (mod rengi kalıcı yansın) aç/kapat. */
+  @SubscribeMessage(WS.LED_SET_AMBIENT)
+  async handleLedSetAmbient(_client: Socket, payload: unknown) {
+    const enabled = parseAmbientPayload(payload);
+    if (enabled === null) {
+      this.logger.warn('Geçersiz led_set_ambient yükü yok sayıldı');
+      return;
+    }
+
+    await this.ledService.setAmbientEnabled(enabled);
+    this.emitLedSync();
+  }
+
+  // ──────────── NFC / Mod ────────────
+
+  @SubscribeMessage(WS.NFC_CHIP_SCANNED)
+  async handleNfcChipScanned(_client: Socket, payload: unknown) {
+    const uid = parseChipUid(payload);
+    if (!uid) {
+      this.logger.warn('Geçersiz nfc_chip_scanned yükü yok sayıldı');
+      return;
+    }
+
+    const { chip, isNew } = await this.nfcService.handleChipScan(uid);
+    this.server.emit(WS.NFC_CHIP_LIST_UPDATED, { chip, isNew });
+
+    if (chip.isRegistered && chip.assignedMode) {
+      await this.switchMode(chip.assignedMode);
+      return;
+    }
+
+    this.server.emit(WS.NFC_UNKNOWN_CHIP, {
       uid: chip.uid,
       chipId: chip.id,
       firstSeenAt: chip.firstSeenAt,
     });
   }
 
-  @SubscribeMessage('nfc_mode_change')
-  async handleModeChange(_client: Socket, newMode: string) {
-    const result = await this.modeService.changeMode(newMode);
+  @SubscribeMessage(WS.NFC_MODE_CHANGE)
+  async handleModeChange(_client: Socket, newMode: unknown) {
+    if (!isModeName(newMode)) {
+      this.logger.warn('Geçersiz nfc_mode_change yükü yok sayıldı');
+      return;
+    }
 
+    await this.switchMode(newMode);
+  }
+
+  // ──────────── Kamera ────────────
+
+  /** Kamera servisi bağlanınca abone olur ve güncel adresi alır. */
+  @SubscribeMessage(WS.CAMERA_CONFIG_SUBSCRIBE)
+  async handleCameraConfigSubscribe(client: Socket) {
+    await client.join(CAMERA_CONFIG_ROOM);
+    client.emit(WS.CAMERA_CONFIG, { url: await this.cameraService.getUrl() });
+  }
+
+  /** Kamera servisinin bağlantı durumu; adres içermez, tüm arayüzlere yayınlanır. */
+  @SubscribeMessage(WS.CAMERA_STATUS)
+  handleCameraStatus(_client: Socket, payload: { connected?: unknown }) {
+    if (typeof payload?.connected !== 'boolean') {
+      return;
+    }
+
+    this.cameraStatus = { connected: payload.connected };
+    this.server.emit(WS.CAMERA_STATUS, this.cameraStatus);
+  }
+
+  /** Arayüz açıldığında bilinen son kamera durumunu ister. */
+  @SubscribeMessage(WS.CAMERA_STATUS_GET)
+  handleCameraStatusGet(client: Socket) {
+    if (this.cameraStatus) {
+      client.emit(WS.CAMERA_STATUS, this.cameraStatus);
+    }
+  }
+
+  // ──────────── Yardımcılar ────────────
+
+  /** Modu değiştirir ve tüm istemcilere + LED'e yansıtır. */
+  private async switchMode(newMode: string) {
+    const result = await this.modeService.changeMode(newMode);
     if (!result) {
       return;
     }
 
-    this.server.emit('mode_changed', result);
+    this.server.emit(WS.MODE_CHANGED, result);
     this.emitPostureAvailability(result.mode);
-    this.server.emit('led_command', {
-      type: 'MODE_CHANGE',
-      color: result.config.color,
-      duration: 5000,
-      brightness: this.ledService.getState().brightness,
-    });
+
+    // Önce taban rengi (ortam ışığı) güncelle; ardından, otomatik moddaysa,
+    // varsa bekleyen uyarıyı silecek şekilde yeni durumu göster. Kullanıcı
+    // LED'i elle yönetiyorsa elle seçtiği renk korunur.
+    this.emitLedSync();
+
+    if (this.ledService.getState().mode !== 'auto') {
+      return;
+    }
+
+    const { ambientColor, brightness } = this.buildLedSync();
+    if (this.ledService.isAmbientEnabled()) {
+      this.emitLedCommand({
+        type: 'MODE_CHANGE',
+        color: ambientColor ?? '#000000',
+        duration: 0,
+        brightness,
+      });
+    } else {
+      this.emitLedCommand({
+        type: 'MODE_CHANGE',
+        color: result.config.color,
+        duration: MODE_FLASH_MS,
+        brightness,
+      });
+    }
+  }
+
+  /** `led_state_sync` yükü: LED durumu + ortam ışığı tercihi ve rengi. */
+  private buildLedSync() {
+    const state = this.ledService.getState();
+    const { mode, config } = this.modeService.getCurrentMode();
+    const ambientEnabled = this.ledService.isAmbientEnabled();
+
+    return {
+      ...state,
+      ambientEnabled,
+      // PASSIVE ("serbest") modda ortam ışığı yanmaz.
+      ambientColor: ambientEnabled && mode !== 'PASSIVE' ? config.color : null,
+    };
+  }
+
+  private emitLedSync() {
+    this.server.emit(WS.LED_STATE_SYNC, this.buildLedSync());
+  }
+
+  private emitLedCommand(command: LedCommand) {
+    this.server.emit(WS.LED_COMMAND, command);
   }
 
   private emitPostureAvailability(mode: string, client?: Socket) {
@@ -244,7 +349,7 @@ export class ZenithGateway
 
     if (mode === 'PASSIVE') {
       this.postureService.setInactive();
-      target.emit('posture_update', {
+      target.emit(WS.POSTURE_UPDATE, {
         isActive: false,
         isSlouching: false,
         distance: 0,
@@ -253,7 +358,7 @@ export class ZenithGateway
     }
 
     const currentStatus = this.postureService.getCurrentStatus();
-    target.emit('posture_update', {
+    target.emit(WS.POSTURE_UPDATE, {
       isActive: true,
       isSlouching: currentStatus.isSlouching,
       distance: currentStatus.distance,

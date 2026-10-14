@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { SensorService } from './sensor.service';
+import { HoursQueryDto } from '../common/dto/hours-query.dto';
 
 @Controller('sensors')
 export class SensorController {
@@ -13,8 +14,7 @@ export class SensorController {
 
   /** Geçmiş sensör verilerini döndür (?hours=24 varsayılan) */
   @Get('history')
-  async getHistory(@Query('hours') hours?: string) {
-    const h = hours ? parseInt(hours, 10) : 24;
-    return this.sensorService.getHistory(h);
+  async getHistory(@Query() query: HoursQueryDto) {
+    return this.sensorService.getHistory(query.hours);
   }
 }

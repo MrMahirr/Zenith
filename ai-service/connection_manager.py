@@ -41,6 +41,7 @@ class ConnectionManager:
         self._waiting_for_backend_logged = False
         self._connect_error_logged = False
         self._connect_callbacks = []
+        self._service_name = None
 
         @self.sio.event
         def connect():
@@ -94,16 +95,19 @@ class ConnectionManager:
 
             time.sleep(BACKEND_RETRY_INTERVAL)
 
-    def connect(self, wait_for_backend=False, timeout=BACKEND_WAIT_TIMEOUT):
+    def connect(self, wait_for_backend=False, timeout=BACKEND_WAIT_TIMEOUT, service=None):
         """Backend'e baglanir.
 
         wait_for_backend=True ise sunucu hazir olana kadar bekler. Baglanti
-        kurulamazsa yeniden baglanma arka planda devam eder.
+        kurulamazsa yeniden baglanma arka planda devam eder. `service`, el
+        sikismada backend'e bildirilir (saglik ucunda "bagli servis" olarak gorunur).
         """
         if self.is_connected or self.sio.connected:
             return True
 
         self._shutting_down = False
+        if service:
+            self._service_name = service
 
         if wait_for_backend:
             try:
@@ -112,7 +116,8 @@ class ConnectionManager:
                 log.warning("Backend bekleme suresi doldu: %s", exc)
 
         try:
-            self.sio.connect(BACKEND_URL, wait_timeout=5)
+            auth = {"service": self._service_name} if self._service_name else None
+            self.sio.connect(BACKEND_URL, auth=auth, wait_timeout=5)
             return True
         except Exception as exc:
             if not self._connect_error_logged:

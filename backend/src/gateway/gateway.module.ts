@@ -7,6 +7,7 @@ import { NfcModule } from '../nfc/nfc.module';
 
 import { LedModule } from '../led/led.module';
 import { CameraModule } from '../camera/camera.module';
+import { StatusModule } from '../status/status.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { CameraModule } from '../camera/camera.module';
     NfcModule,
     LedModule,
     CameraModule,
+    StatusModule,
   ],
   providers: [ZenithGateway],
   exports: [ZenithGateway],

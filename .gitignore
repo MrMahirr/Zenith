@@ -56,3 +56,9 @@ ai-service/Miniforge3-Linux-aarch64.sh
 
 # Obsidian planlama vault (yerel)
 zenith-vault/
+
+# SQLite veritabanı: canlı veri; migration ile oluşur, git'te tutulmaz
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal

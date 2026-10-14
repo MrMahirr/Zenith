@@ -20,6 +20,9 @@ BACKEND_HEALTH_URL="${ZENITH_BACKEND_HEALTH_URL:-http://127.0.0.1:3000/api/healt
 FRONTEND_URL="${ZENITH_FRONTEND_URL:-http://127.0.0.1:4173}"
 HEALTH_TIMEOUT="${ZENITH_HEALTH_TIMEOUT:-120}"
 
+DB_REL="backend/zenith.sqlite"
+DB_RESCUE=""
+
 REF=""
 FORCE=0
 RUN_TESTS=1
@@ -147,8 +150,60 @@ backup_database() {
   run "$ROOT/scripts/backup-db.sh"
 }
 
+tracked_in() { git -C "$ROOT" cat-file -e "$1:$DB_REL" 2>/dev/null; }
+
+# Canlı veritabanı eski sürümlerde git'te izleniyordu; yeni sürümde izlenmiyor
+# (ya da geri alırken tersi). git bu dosyayı silmeye/ezmeye çalışacağı için,
+# sürüm geçişi sırasında dosya kenara alınır ve işlem bitince geri konur.
+# Backend önce durdurulur ve WAL, ana dosyaya işlenir; böylece kopya tutarlıdır.
+rescue_database() {
+  local db="$ROOT/$DB_REL"
+  [ -f "$db" ] || return 0
+  tracked_in HEAD || tracked_in "$TARGET" || return 0
+
+  log "Veritabanı git takibi değişiyor; dosya korumaya alınıyor"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "    [dry-run] backend durdur, WAL checkpoint, $DB_REL kenara al ve geri koy"
+    return 0
+  fi
+
+  pm2 stop zenith-backend >/dev/null 2>&1 || true
+  python3 - "$db" <<'PY' || warn "WAL checkpoint yapılamadı; dosya olduğu gibi kopyalanıyor"
+import sqlite3
+import sys
+
+connection = sqlite3.connect(sys.argv[1])
+connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+connection.close()
+PY
+
+  mkdir -p "$STATE_DIR"
+  DB_RESCUE="$STATE_DIR/zenith.sqlite.rescue"
+  cp -p "$db" "$DB_RESCUE"
+
+  # Bir adım başarısız olursa da dosya yerine konsun.
+  trap restore_database EXIT
+
+  if tracked_in HEAD; then
+    git -C "$ROOT" checkout --quiet -- "$DB_REL"   # izlenen kopyayı temiz hâle getir
+  else
+    rm -f "$db"                                     # hedef izliyorsa çakışmasın
+  fi
+}
+
+restore_database() {
+  [ -n "$DB_RESCUE" ] || return 0
+  local db="$ROOT/$DB_REL"
+  mkdir -p "$(dirname "$db")"   # git, boşalan dizini silmiş olabilir
+  mv -f "$DB_RESCUE" "$db"
+  rm -f "$db-wal" "$db-shm"   # eski kopyaya ait artık WAL dosyaları
+  DB_RESCUE=""
+  echo "    veritabanı geri yüklendi: $DB_REL"
+}
+
 update_source() {
   log "Kaynak kod güncelleniyor"
+  rescue_database
   if [ -n "$REF" ]; then
     run git -C "$ROOT" checkout --quiet --detach "$TARGET"
   else
@@ -157,6 +212,7 @@ update_source() {
     [ "$branch" = "master" ] || run git -C "$ROOT" checkout --quiet master
     run git -C "$ROOT" merge --quiet --ff-only "$TARGET"
   fi
+  restore_database
 }
 
 install_dependencies() {
@@ -327,4 +383,6 @@ main() {
   fi
 }
 
-main
+# Betik kendi kendini `git merge` ile güncelleyebilir; bash dosyayı artımlı
+# okuduğu için `main` ve `exit` aynı satırda olmalı (sonrası okunmasın).
+main; exit $?

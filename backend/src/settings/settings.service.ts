@@ -1,27 +1,17 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 /**
  * Basit anahtar-değer ayar deposu.
  *
- * Çalışma sırasında değiştirilebilen ayarları (ör. kamera adresi) veritabanında
- * saklar. Tablo yoksa ilk açılışta oluşturulur; mevcut veriye dokunulmaz.
+ * Çalışma sırasında değiştirilebilen ayarları (kamera adresi, LED durumu...)
+ * veritabanında saklar. `app_settings` tablosu migration ile oluşturulur.
  */
 @Injectable()
-export class SettingsService implements OnModuleInit {
+export class SettingsService {
   private readonly logger = new Logger(SettingsService.name);
 
   constructor(private readonly dataSource: DataSource) {}
-
-  async onModuleInit() {
-    await this.dataSource.query(
-      `CREATE TABLE IF NOT EXISTS app_settings (
-         key TEXT PRIMARY KEY,
-         value TEXT NOT NULL,
-         updatedAt TEXT NOT NULL
-       )`,
-    );
-  }
 
   async get(key: string): Promise<string | null> {
     const rows: Array<{ value: string }> = await this.dataSource.query(

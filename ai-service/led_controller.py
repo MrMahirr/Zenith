@@ -50,6 +50,9 @@ class LEDController:
         self._thread = None
 
         self._color = BLACK
+        # Tabana donulur: sureli komutlar (ornegin 2 sn yesil) bitince ya da
+        # uyari kalkinca gosterilen renk. Manuel renk ya da ortam isigi olabilir.
+        self._base_color = BLACK
         self._brightness = LED_BRIGHTNESS
         self._expires_at = 0.0  # time.monotonic() cinsinden; 0 = sure siniri yok
         self._last_write_error = None
@@ -129,10 +132,14 @@ class LEDController:
             return
 
         brightness = clamp_brightness(data.get("brightness"))
-        duration = parse_duration_seconds(data.get("duration"))
+        manual = data.get("type") == "MANUAL"
+        # Manuel renk kalicidir; yalnizca diger komutlar sureli olabilir.
+        duration = 0.0 if manual else parse_duration_seconds(data.get("duration"))
 
         with self._lock:
             self._color = color
+            if manual:
+                self._base_color = color
             if brightness is not None:
                 self._brightness = brightness
             self._expires_at = time.monotonic() + duration if duration > 0 else 0.0
@@ -146,24 +153,39 @@ class LEDController:
             return
 
         brightness = clamp_brightness(data.get("brightness"))
-        color = parse_hex_color(data.get("color"))
-        manual = data.get("mode") == "manual"
-        is_on = data.get("isOn")
 
         with self._lock:
             if brightness is not None:
                 self._brightness = brightness
 
-            # Otomatik modda renk postur/mod olaylarindan gelir; yalnizca
-            # manuel modda backend'deki renk tek dogru kaynaktir.
-            if manual and is_on is False:
-                self._color = BLACK
-                self._expires_at = 0.0
-            elif manual and is_on and color is not None:
-                self._color = color
-                self._expires_at = 0.0
+            new_base = self._base_from_sync(data)
+            if new_base is not None:
+                old_base = self._base_color
+                self._base_color = new_base
+                # Gosterilen renk tabanı izliyorsa yeni tabana gec. Aktif bir
+                # uyari (kirmizi) ya da sureli komut varsa ona dokunma; o bitince
+                # yeni tabana donulur.
+                if self._expires_at == 0.0 and self._color == old_base:
+                    self._color = new_base
 
             self._render()
+
+    @staticmethod
+    def _base_from_sync(data):
+        """Backend durumundan taban rengi cikarir; belirlenemezse None."""
+        mode = data.get("mode")
+
+        if mode == "manual":
+            if data.get("isOn") is False:
+                return BLACK
+            color = parse_hex_color(data.get("color"))
+            return color if data.get("isOn") is True and color is not None else None
+
+        if mode == "auto":
+            # Ortam isigi kapaliyken ambientColor null'dir: taban sondur.
+            return parse_hex_color(data.get("ambientColor")) or BLACK
+
+        return None
 
     # --- Yasam dongusu -------------------------------------------------------
 
@@ -202,7 +224,7 @@ class LEDController:
         while not self._stop_event.wait(_EXPIRY_CHECK_SECONDS):
             with self._lock:
                 if self._expires_at and time.monotonic() >= self._expires_at:
-                    self._color = BLACK
+                    self._color = self._base_color
                     self._expires_at = 0.0
                     self._render()
 
@@ -211,6 +233,7 @@ class LEDController:
 
         with self._lock:
             self._color = BLACK
+            self._base_color = BLACK
             self._expires_at = 0.0
             self._render()
 

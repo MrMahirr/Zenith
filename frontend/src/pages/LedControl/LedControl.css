@@ -206,3 +206,41 @@
   transition: background 0.3s ease, box-shadow 0.3s ease;
   border: 1px solid rgba(255,255,255,0.1);
 }
+
+/* Ortam ışığı anahtarı */
+.led-control__ambient {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+
+.led-control__ambient-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.led-control__ambient-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.led-control__ambient-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.led-control__ambient-switch {
+  width: 20px;
+  height: 20px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+  flex: none;
+}

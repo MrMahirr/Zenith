@@ -96,7 +96,7 @@ export class PostureService implements OnModuleInit {
       this.writeBuffer = [];
 
       // SQLite üzerinde tek tek yazmak yerine transaction ile toplu yazım (Batch Insert) yapıyoruz.
-      // SOLID/IoC ve 'hiçbir şekilde TypeORM kullanmama' kuralına uygun olarak Raw SQL kullanılmıştır.
+      // Yüksek sıklıklı yazma yolu: ham SQL ve tek transaction ile toplu ekleme.
       const queryRunner = this.dataSource.createQueryRunner();
       await queryRunner.connect();
       await queryRunner.startTransaction();

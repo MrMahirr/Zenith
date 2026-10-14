@@ -473,6 +473,7 @@ export function Analytics() {
                   ))}
                 </Pie>
                 <Tooltip
+                  formatter={(value) => `${value} dk`}
                   contentStyle={{
                     background: '#1a1f36',
                     border: '1px solid rgba(255,255,255,0.1)',

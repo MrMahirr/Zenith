@@ -61,7 +61,7 @@ def main():
         # Isleyiciler (conn.on) servis olusturulurken kaydedilir; baglantidan
         # once hazir olmalari backend'in ilk olaylarini kacirmamalarini saglar.
         service = build_service(args.service)
-        conn.connect(wait_for_backend=True)
+        conn.connect(wait_for_backend=True, service=args.service)
         service.start()
 
         log.info("%s servisi aktif.", name)

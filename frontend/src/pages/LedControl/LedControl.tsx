@@ -12,7 +12,7 @@ const PRESET_COLORS = [
 
 export function LedControl() {
   const navigate = useNavigate();
-  const { state, setManual, setAuto, turnOff, setBrightness } = useLed();
+  const { state, setManual, setAuto, turnOff, setBrightness, setAmbient } = useLed();
   
   // Yerel state'ler (slider sürüklerken anında tepki için)
   const [localColor, setLocalColor] = useState(state.color);
@@ -134,6 +134,22 @@ export function LedControl() {
                 <span className="led-control__slider-val">{Math.round((localBrightness / 255) * 100)}%</span>
               </div>
             </div>
+
+            <label className="led-control__ambient" htmlFor="led-ambient-toggle">
+              <span className="led-control__ambient-text">
+                <span className="led-control__ambient-title">Ortam ışığı</span>
+                <span className="led-control__ambient-hint">
+                  Açıkken aktif modun rengi sürekli yanar (Serbest modda sönük).
+                </span>
+              </span>
+              <input
+                id="led-ambient-toggle"
+                type="checkbox"
+                className="led-control__ambient-switch"
+                checked={state.ambientEnabled}
+                onChange={(event) => setAmbient(event.target.checked)}
+              />
+            </label>
 
             <button
               className={`led-control__power-btn ${state.isOn && state.mode === 'manual' ? 'led-control__power-btn--off' : 'led-control__power-btn--on'}`}

@@ -6,6 +6,9 @@ export interface LedState {
   brightness: number;
   isOn: boolean;
   mode: 'manual' | 'auto';
+  /** Ortam ışığı: açıkken aktif modun rengi kalıcı yanar (varsayılan kapalı). */
+  ambientEnabled: boolean;
+  ambientColor: string | null;
 }
 
 export function useLed() {
@@ -15,6 +18,8 @@ export function useLed() {
     brightness: 128,
     isOn: false,
     mode: 'auto',
+    ambientEnabled: false,
+    ambientColor: null,
   });
 
   useEffect(() => {
@@ -48,11 +53,16 @@ export function useLed() {
     socket.emit('led_set_brightness', { brightness });
   };
 
+  const setAmbient = (enabled: boolean) => {
+    socket.emit('led_set_ambient', { enabled });
+  };
+
   return {
     state,
     setManual,
     setAuto,
     turnOff,
     setBrightness,
+    setAmbient,
   };
 }

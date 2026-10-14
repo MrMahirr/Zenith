@@ -9,6 +9,9 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { NfcService } from './nfc.service';
+import { RegisterChipDto } from './dto/register-chip.dto';
+import { UpdateChipDto } from './dto/update-chip.dto';
+import { HoursQueryDto } from '../common/dto/hours-query.dto';
 
 /**
  * NFC Controller
@@ -42,7 +45,7 @@ export class NfcController {
   @Patch('chips/:id/register')
   async registerChip(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { label: string; assignedMode: string },
+    @Body() body: RegisterChipDto,
   ) {
     return this.nfcService.registerChip(id, body.label, body.assignedMode);
   }
@@ -51,7 +54,7 @@ export class NfcController {
   @Patch('chips/:id')
   async updateChip(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { label?: string; assignedMode?: string },
+    @Body() body: UpdateChipDto,
   ) {
     return this.nfcService.updateChip(id, body);
   }
@@ -65,8 +68,7 @@ export class NfcController {
 
   /** Okuma loglarını getir */
   @Get('logs')
-  async getScanLogs(@Query('hours') hours?: string) {
-    const h = hours ? parseInt(hours, 10) : 24;
-    return this.nfcService.getScanLogs(h);
+  async getScanLogs(@Query() query: HoursQueryDto) {
+    return this.nfcService.getScanLogs(query.hours);
   }
 }
