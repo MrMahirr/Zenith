@@ -130,7 +130,7 @@ Ayarlar `.env` dosyalarından okunur; tüm anahtarlar ve açıklamaları için `
 
 ## Kiosk ekranı
 
-Masaüstü oturumu açılınca `zenith-kiosk.desktop` → `kiosk.sh` çalışır: frontend hazır olana kadar bekler, Brave'i tam ekran açar, kapanırsa yeniden açar. Tarayıcı sürekli çökerse bekleme süresini katlar; toplam bellek `ZENITH_KIOSK_MAX_RSS_MB` (varsayılan 900) değerini aşarsa yeniden başlatır. Log: `~/.cache/zenith/kiosk.log`.
+Masaüstü oturumu açılınca `zenith-kiosk.desktop` → `kiosk.sh` çalışır: frontend hazır olana kadar bekler, Brave'i tam ekran açar, kapanırsa yeniden açar. Tarayıcı sürekli çökerse bekleme süresini katlar; bellek kullanımı (PSS) `ZENITH_KIOSK_MAX_MEM_MB` (varsayılan 1000) değerini art arda 3 kontrolde aşarsa yeniden başlatır. Log: `~/.cache/zenith/kiosk.log`.
 
 ## Sorun giderme
 

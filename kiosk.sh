@@ -5,16 +5,22 @@
 # - Frontend (PM2: zenith-frontend) hazır olana kadar bekler.
 # - Brave'i tam ekran kiosk modunda açar; kapanırsa yeniden açar.
 # - Tarayıcı hemen çökmeye devam ederse bekleme süresini katlayarak artırır.
-# - Toplam bellek kullanımı sınırı aşarsa tarayıcıyı yeniden başlatır (sızıntı koruması).
+# - Bellek kullanımı sınırı art arda birkaç kontrolde aşılırsa tarayıcıyı yeniden
+#   başlatır (sızıntı koruması).
+#
+# Bellek PSS ile ölçülür: tarayıcının onlarca süreci paylaşılan sayfaları
+# kullandığından RSS toplamı gerçek kullanımı 2-3 kat şişirir.
 #
 # Ortam değişkenleri:
-#   ZENITH_KIOSK_URL            açılacak adres               (varsayılan: http://localhost:4173)
-#   ZENITH_KIOSK_MAX_RSS_MB     bellek sınırı (MB)           (varsayılan: 900)
-#   ZENITH_KIOSK_CHECK_SECONDS  bellek kontrol aralığı (sn)  (varsayılan: 30)
+#   ZENITH_KIOSK_URL            açılacak adres                    (varsayılan: http://localhost:4173)
+#   ZENITH_KIOSK_MAX_MEM_MB     bellek sınırı, PSS toplamı (MB)   (varsayılan: 1000)
+#   ZENITH_KIOSK_CHECK_SECONDS  bellek kontrol aralığı (sn)       (varsayılan: 30)
+#   ZENITH_KIOSK_STRIKES        art arda kaç aşımda yeniden başlat (varsayılan: 3)
 
 URL="${ZENITH_KIOSK_URL:-http://localhost:4173}"
-MAX_RSS_MB="${ZENITH_KIOSK_MAX_RSS_MB:-900}"
+MAX_MEM_MB="${ZENITH_KIOSK_MAX_MEM_MB:-1000}"
 CHECK_SECONDS="${ZENITH_KIOSK_CHECK_SECONDS:-30}"
+STRIKES_LIMIT="${ZENITH_KIOSK_STRIKES:-3}"
 
 MIN_HEALTHY_SECONDS=20   # bundan kısa süren oturum "çökme" sayılır
 MIN_BACKOFF=3
@@ -30,9 +36,15 @@ fi
 
 log() { printf '%s %s\n' "$(date '+%F %T')" "$*" >> "$LOG_FILE"; }
 
-# Kiosk oturumuna (setsid ile ayrı oturum) ait tüm süreçlerin toplam RSS'i, MB.
-session_rss_mb() {
-  ps -o rss= --sid "$1" 2>/dev/null | awk '{s += $1} END {print int(s / 1024)}'
+# Kiosk oturumuna (setsid ile ayrı oturum) ait tüm süreçlerin toplam PSS'i, MB.
+# Okunamayan süreçler 0 sayılır; ölçüm yapılamazsa sınır hiç tetiklenmez.
+session_mem_mb() {
+  local pid pss total_kb=0
+  for pid in $(ps -o pid= --sid "$1" 2>/dev/null); do
+    pss="$(awk '/^Pss:/ {print $2}' "/proc/$pid/smaps_rollup" 2>/dev/null)"
+    total_kb=$(( total_kb + ${pss:-0} ))
+  done
+  echo $(( total_kb / 1024 ))
 }
 
 stop_session() {
@@ -67,15 +79,22 @@ while true; do
   pid=$!
   log "tarayici basladi (pid $pid)"
 
+  strikes=0
   while kill -0 "$pid" 2>/dev/null; do
     sleep "$CHECK_SECONDS"
     kill -0 "$pid" 2>/dev/null || break
 
-    rss="$(session_rss_mb "$pid")"
-    if [ "${rss:-0}" -gt "$MAX_RSS_MB" ]; then
-      log "bellek siniri asildi (${rss} MB > ${MAX_RSS_MB} MB); tarayici yeniden baslatiliyor"
-      stop_session "$pid"
-      break
+    mem="$(session_mem_mb "$pid")"
+    if [ "${mem:-0}" -gt "$MAX_MEM_MB" ]; then
+      strikes=$(( strikes + 1 ))
+      log "bellek yuksek: ${mem} MB > ${MAX_MEM_MB} MB (${strikes}/${STRIKES_LIMIT})"
+      if [ "$strikes" -ge "$STRIKES_LIMIT" ]; then
+        log "bellek siniri kalici asildi; tarayici yeniden baslatiliyor"
+        stop_session "$pid"
+        break
+      fi
+    else
+      strikes=0
     fi
   done
 
