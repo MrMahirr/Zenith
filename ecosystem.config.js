@@ -47,7 +47,7 @@ module.exports = {
       name: 'zenith-camera',
       cwd: '/home/mahir/Zenith/ai-service',
       script: '/home/mahir/miniforge3/envs/zenith-ai/bin/python',
-      args: 'main.py --service camera',
+      args: '-u main.py --service camera',
       interpreter: 'none',
       exec_mode: 'fork',
       autorestart: true,
@@ -64,7 +64,7 @@ module.exports = {
       name: 'zenith-sensor',
       cwd: '/home/mahir/Zenith/ai-service',
       script: '/home/mahir/miniforge3/envs/zenith-ai/bin/python',
-      args: 'main.py --service sensor',
+      args: '-u main.py --service sensor',
       interpreter: 'none',
       exec_mode: 'fork',
       autorestart: true,
@@ -80,7 +80,7 @@ module.exports = {
       name: 'zenith-nfc',
       cwd: '/home/mahir/Zenith/ai-service',
       script: '/home/mahir/miniforge3/envs/zenith-ai/bin/python',
-      args: 'main.py --service nfc',
+      args: '-u main.py --service nfc',
       interpreter: 'none',
       exec_mode: 'fork',
       autorestart: true,
@@ -92,12 +92,13 @@ module.exports = {
     // ──────────────────────────────────────────────
     // 6. LED – WS281x (GPIO18). rpi_ws281x DMA erişimi için root
     //    gerektirir; bu yüzden sudo ile başlatılır (mahir şifresiz sudo).
+    //    Python servislerinde -u (tamponsuz çıktı): loglar PM2'ye gecikmeden düşer.
     // ──────────────────────────────────────────────
     {
       name: 'zenith-led',
       cwd: '/home/mahir/Zenith/ai-service',
       script: 'sudo',
-      args: '/home/mahir/miniforge3/envs/zenith-ai/bin/python main.py --service led',
+      args: '/home/mahir/miniforge3/envs/zenith-ai/bin/python -u main.py --service led',
       interpreter: 'none',
       exec_mode: 'fork',
       autorestart: true,

@@ -1,30 +1,33 @@
 import argparse
+import importlib
+import logging
 import signal
 import sys
 from threading import Event
 
 from connection_manager import ConnectionManager
+from logging_setup import setup_logging
+
+log = logging.getLogger("zenith.main")
+
+# Servis adi -> (modul, sinif). Modüller yalnizca ilgili servis calisirken
+# yuklenir; boylece ornegin LED servisi OpenCV/MediaPipe'i import etmez.
+SERVICES = {
+    "camera": ("posture_analyzer", "PostureAnalyzer"),
+    "sensor": ("sensor_manager", "SensorManager"),
+    "led": ("led_controller", "LEDController"),
+    "nfc": ("nfc_manager", "NFCManager"),
+}
 
 
-def _build_service(service_name):
-    if service_name == "camera":
-        from posture_analyzer import PostureAnalyzer
+def build_service(service_name):
+    try:
+        module_name, class_name = SERVICES[service_name]
+    except KeyError:
+        raise ValueError(f"Desteklenmeyen servis: {service_name}") from None
 
-        return PostureAnalyzer()
-    if service_name == "sensor":
-        from sensor_manager import SensorManager
-
-        return SensorManager()
-    if service_name == "led":
-        from led_controller import LEDController
-
-        return LEDController()
-    if service_name == "nfc":
-        from nfc_manager import NFCManager
-
-        return NFCManager()
-
-    raise ValueError(f"Desteklenmeyen servis: {service_name}")
+    module = importlib.import_module(module_name)
+    return getattr(module, class_name)()
 
 
 def main():
@@ -33,51 +36,51 @@ def main():
         "--service",
         type=str,
         required=True,
-        choices=["camera", "sensor", "led", "nfc"],
+        choices=sorted(SERVICES),
         help="Baslatilacak mikroservis",
     )
     args = parser.parse_args()
+    name = args.service.upper()
 
-    print("==============================================")
-    print(f"   ZENITH {args.service.upper()} SERVISI BASLATILIYOR")
-    print("==============================================\n")
+    setup_logging()
+    log.info("ZENITH %s SERVISI BASLATILIYOR", name)
 
     stop_event = Event()
     conn = ConnectionManager()
     service = None
+    exit_code = 0
 
     def _request_shutdown(signum, _frame):
-        signal_name = signal.Signals(signum).name
-        print(f"\n[Sistem] Kapatilma sinyali alindi: {signal_name}")
+        log.info("Kapatilma sinyali alindi: %s", signal.Signals(signum).name)
         stop_event.set()
 
     signal.signal(signal.SIGINT, _request_shutdown)
     signal.signal(signal.SIGTERM, _request_shutdown)
 
     try:
-        service = _build_service(args.service)
-        # Backend hazır olana kadar bekle, ardından servisi başlat
+        # Isleyiciler (conn.on) servis olusturulurken kaydedilir; baglantidan
+        # once hazir olmalari backend'in ilk olaylarini kacirmamalarini saglar.
+        service = build_service(args.service)
         conn.connect(wait_for_backend=True)
         service.start()
 
-        print(f"\n[{args.service.upper()}] Servis aktif. Cikmak icin Ctrl+C.\n")
-
+        log.info("%s servisi aktif.", name)
         while not stop_event.wait(1):
             pass
-    except Exception as exc:
-        print(f"\n[KRITIK] Servis baslatilamadi: {exc}")
-        import traceback
-        traceback.print_exc()
-        stop_event.set()
+    except Exception:
+        log.critical("%s servisi baslatilamadi veya coktu", name, exc_info=True)
+        exit_code = 1
     finally:
-        print(f"[Sistem] {args.service.upper()} servisi guvenli sekilde kapatiliyor...")
-        if service:
+        log.info("%s servisi guvenli sekilde kapatiliyor...", name)
+        if service is not None:
             try:
                 service.stop()
-            except Exception as exc:
-                print(f"[Hata] Durdurulurken hata olustu: {exc}")
+            except Exception:
+                log.exception("Durdurulurken hata olustu")
         conn.disconnect()
-        print("[Sistem] Cikis yapildi.")
+        log.info("Cikis yapildi.")
+
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

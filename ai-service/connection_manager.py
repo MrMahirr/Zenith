@@ -1,3 +1,4 @@
+import logging
 import time
 import urllib.request
 
@@ -10,14 +11,19 @@ from config import (
     BACKEND_WAIT_TIMEOUT,
 )
 
+log = logging.getLogger("zenith.connection")
+
 
 class ConnectionManager:
+    """Backend ile Socket.io baglantisini yoneten, surec basina tek ornekli sinif."""
+
     _instance = None
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(ConnectionManager, cls).__new__(cls)
-            cls._instance._initialize()
+            instance = super().__new__(cls)
+            instance._initialize()
+            cls._instance = instance
         return cls._instance
 
     def _initialize(self):
@@ -34,30 +40,39 @@ class ConnectionManager:
         self._shutting_down = False
         self._waiting_for_backend_logged = False
         self._connect_error_logged = False
+        self._connect_callbacks = []
 
         @self.sio.event
         def connect():
             self.is_connected = True
             self._waiting_for_backend_logged = False
             self._connect_error_logged = False
-            print("[Baglanti] Backend sunucusuna basariyla baglanildi!")
+            log.info("Backend sunucusuna baglanildi.")
+            self._run_connect_callbacks()
 
         @self.sio.event
         def disconnect():
             if self.is_connected and not self._shutting_down:
-                print("[Baglanti] Backend baglantisi koptu. Yeniden baglaniliyor...")
+                log.warning("Backend baglantisi koptu. Yeniden baglaniliyor...")
             self.is_connected = False
 
         @self.sio.event
         def connect_error(data):
             if not self._connect_error_logged:
-                print(f"[Baglanti] Socket baglantisi kurulamadi: {data}")
+                log.warning("Socket baglantisi kurulamadi: %s", data)
                 self._connect_error_logged = True
 
-    def _is_backend_ready(self):
+    def _run_connect_callbacks(self):
+        for callback in list(self._connect_callbacks):
+            try:
+                callback()
+            except Exception:
+                log.exception("Baglanti callback'i hata verdi")
+
+    @staticmethod
+    def _is_backend_ready():
         request = urllib.request.Request(
-            BACKEND_HEALTH_URL,
-            headers={"User-Agent": "ZenithAI/1.0"},
+            BACKEND_HEALTH_URL, headers={"User-Agent": "ZenithAI/1.0"}
         )
         try:
             with urllib.request.urlopen(request, timeout=3) as response:
@@ -65,75 +80,68 @@ class ConnectionManager:
         except Exception:
             return False
 
-    @staticmethod
-    def _get_deadline(timeout):
-        if timeout is None or timeout <= 0:
-            return None
-        return time.time() + timeout
-
-    @staticmethod
-    def _ensure_not_timed_out(deadline):
-        if deadline is not None and time.time() >= deadline:
-            raise TimeoutError("Backend belirtilen sure icinde hazir olmadi.")
-
     def wait_for_backend(self, timeout=BACKEND_WAIT_TIMEOUT):
-        deadline = self._get_deadline(timeout)
+        """Backend saglik adresi cevap verene kadar bekler. timeout<=0 sonsuz bekler."""
+        deadline = time.monotonic() + timeout if timeout and timeout > 0 else None
 
         while not self._is_backend_ready():
-            self._ensure_not_timed_out(deadline)
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError("Backend belirtilen sure icinde hazir olmadi.")
 
             if not self._waiting_for_backend_logged:
-                print(
-                    f"[Baglanti] Backend aktif degil. {BACKEND_HEALTH_URL} bekleniyor..."
-                )
+                log.info("Backend aktif degil. %s bekleniyor...", BACKEND_HEALTH_URL)
                 self._waiting_for_backend_logged = True
 
             time.sleep(BACKEND_RETRY_INTERVAL)
 
     def connect(self, wait_for_backend=False, timeout=BACKEND_WAIT_TIMEOUT):
-        """
-        Backend'e baglanir. 
-        wait_for_backend=True ise sunucu aktif olana kadar bekler.
-        False ise bir kez dener ve arka planda baglanmaya devam eder.
+        """Backend'e baglanir.
+
+        wait_for_backend=True ise sunucu hazir olana kadar bekler. Baglanti
+        kurulamazsa yeniden baglanma arka planda devam eder.
         """
         if self.is_connected or self.sio.connected:
             return True
 
         self._shutting_down = False
-        
+
         if wait_for_backend:
             try:
                 self.wait_for_backend(timeout=timeout)
             except TimeoutError as exc:
-                print(f"[Baglanti] Backend bekleme suresi doldu: {exc}")
-                # Bekleme dolsa bile devam etmeye calis, arka planda baglanir.
+                log.warning("Backend bekleme suresi doldu: %s", exc)
 
-        # İlk baglanti denemesi
         try:
-            # wait_timeout=5 saniye boyunca sunucuya ulasmaya calisir.
-            # Eger sunucu yoksa bile asenkron reconnection aktif oldugu icin hata firlatmaz.
             self.sio.connect(BACKEND_URL, wait_timeout=5)
             return True
         except Exception as exc:
             if not self._connect_error_logged:
-                print(
-                    f"[Baglanti] Backend'e su an ulasilamiyor ({exc}). "
-                    "Servis baslatiliyor, baglanti arka planda saglanacak..."
+                log.warning(
+                    "Backend'e su an ulasilamiyor (%s). Baglanti arka planda saglanacak.",
+                    exc,
                 )
                 self._connect_error_logged = True
             return False
 
+    def on(self, event, handler):
+        """Backend'den gelen bir olay icin isleyici kaydeder."""
+        self.sio.on(event, handler)
+
+    def on_connect(self, callback):
+        """Her (yeniden) baglantida cagrilacak parametresiz bir fonksiyon kaydeder."""
+        self._connect_callbacks.append(callback)
+
     def emit(self, event, data=None):
+        """Olay gonderir. Baglanti yoksa veri atilir ve False doner."""
         if not self.is_connected:
-            return
+            return False
 
         try:
             self.sio.emit(event, data)
+            return True
         except Exception as exc:
-            print(f"[Hata] Veri gonderilemedi: {exc}")
-
-    def on(self, event, handler):
-        self.sio.on(event, handler)
+            log.error("Veri gonderilemedi (%s): %s", event, exc)
+            return False
 
     def disconnect(self):
         if self.is_connected or self.sio.connected:

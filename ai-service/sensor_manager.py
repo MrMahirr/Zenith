@@ -1,114 +1,210 @@
-import time
+"""BME280 (sicaklik/nem/basinc) ve MQ135 (gaz, ADS1115 uzerinden) okuyup backend'e gonderen servis."""
+
+import logging
 import threading
-import board
-import busio
-from config import I2C_PORT, BME280_ADDRESS
+
+from config import (
+    BME280_ADDRESS,
+    I2C_PORT,
+    SENSOR_MAX_CONSECUTIVE_ERRORS,
+    SENSOR_READ_INTERVAL,
+    SENSOR_REINIT_DELAY,
+    SIMULATE_HARDWARE,
+)
 from connection_manager import ConnectionManager
 
-HAS_HARDWARE = False
-try:
-    import smbus2
-    import bme280
-    import adafruit_ads1x15.ads1115 as ads_mod
-    from adafruit_ads1x15.ads1115 import ADS1115
-    from adafruit_ads1x15.analog_in import AnalogIn
-    
-    # Bazı versiyonlarda P0 modül altındadır, bazılarında ADS1115 sınıfı içindedir.
-    # En garanti yol:
-    P0_PIN = getattr(ads_mod, 'P0', 0) 
-    HAS_HARDWARE = True
-except ImportError as e:
-    print(f"UYARI: Donanım kütüphaneleri eksik ({e}). Mock mod aktif.")
-except Exception as e:
-    print(f"UYARI: Donanım başlatılamadı ({e}). Mock mod aktif.")
+log = logging.getLogger("zenith.sensor")
+
+MQ135_ADC_CHANNEL = 0
+MQ135_FULL_SCALE_VOLTS = 5.0
+# MQ135 beslemesiz/kopuk oldugunda AO ~0 V okunur ve "mukemmel hava" gibi gorunur.
+_MQ135_DEAD_SIGNAL_VOLTS = 0.01
+
+
+def voltage_to_air_quality(voltage):
+    """MQ135 gerilimini 0-100 olcegine cevirir.
+
+    Bu degerlendirme kalibre degildir: gercek ppm icin temiz havada R0
+    kalibrasyonu ve sicaklik/nem duzeltmesi gerekir.
+    """
+    return round((voltage / MQ135_FULL_SCALE_VOLTS) * 100, 1)
+
+
+class SensorHardware:
+    """BME280 + ADS1115 (MQ135) okuyucusu. open() her cagrida I2C'yi bastan acar."""
+
+    def __init__(self):
+        self._bus = None
+        self._i2c = None
+        self._calibration = None
+        self._channel = None
+        self._bme280 = None
+
+    def open(self):
+        import bme280
+        import smbus2
+        from adafruit_ads1x15.ads1115 import ADS1115
+        from adafruit_ads1x15.analog_in import AnalogIn
+
+        try:
+            from adafruit_extended_bus import ExtendedI2C as I2C
+        except ImportError:
+            from adafruit_blinka.microcontroller.generic_linux.i2c import I2C
+
+        self.close()
+        try:
+            self._i2c = I2C(I2C_PORT)
+            adc = ADS1115(self._i2c)
+            self._channel = AnalogIn(adc, MQ135_ADC_CHANNEL)
+
+            self._bus = smbus2.SMBus(I2C_PORT)
+            self._bme280 = bme280
+            self._calibration = bme280.load_calibration_params(self._bus, BME280_ADDRESS)
+        except Exception:
+            self.close()
+            raise
+
+    def read(self):
+        sample = self._bme280.sample(self._bus, BME280_ADDRESS, self._calibration)
+        voltage = self._channel.voltage
+
+        return {
+            "temp": round(sample.temperature, 1),
+            "humidity": round(sample.humidity, 1),
+            "pressure": round(sample.pressure, 1),
+            "air_quality": voltage_to_air_quality(voltage),
+            "gas_voltage": round(voltage, 3),
+        }
+
+    @staticmethod
+    def _release(resource):
+        """smbus2 (close) ve Blinka I2C (deinit) nesnelerini sessizce birakir."""
+        for name in ("close", "deinit"):
+            method = getattr(resource, name, None)
+            if callable(method):
+                try:
+                    method()
+                except Exception:
+                    pass
+                return
+
+    def close(self):
+        for resource in (self._bus, self._i2c):
+            if resource is not None:
+                self._release(resource)
+
+        self._bus = self._i2c = self._channel = self._calibration = None
+
+
+class SimulatedHardware:
+    """Donanimsiz gelistirme icin sabit degerler (yalnizca SIMULATE_HARDWARE=1)."""
+
+    def open(self):
+        log.warning("SIMULATE_HARDWARE acik: sahte sensor verisi uretiliyor.")
+
+    def read(self):
+        return {
+            "temp": 24.5,
+            "humidity": 62.0,
+            "pressure": 1013.2,
+            "air_quality": 12.5,
+            "gas_voltage": 0.450,
+        }
+
+    def close(self):
+        pass
+
 
 class SensorManager:
-    def __init__(self):
+    def __init__(self, hardware=None):
         self.conn = ConnectionManager()
-        self.running = False
-        self.ads = None
-        self.mq135_channel = None
+        self._hardware = hardware or (
+            SimulatedHardware() if SIMULATE_HARDWARE else SensorHardware()
+        )
+        self._stop_event = threading.Event()
+        self._thread = None
 
-        if HAS_HARDWARE:
-            try:
-                # Önce ADS1115 için I2C Bus 3'ü hazırlayalım
-                try:
-                    from adafruit_extended_bus import ExtendedI2C as I2C
-                    self.i2c_bus = I2C(I2C_PORT)
-                except ImportError:
-                    from adafruit_blinka.microcontroller.generic_linux.i2c import I2C as LinuxI2C
-                    self.i2c_bus = LinuxI2C(I2C_PORT)
-
-                # ADS1115 Başlatma
-                self.ads = ADS1115(self.i2c_bus)
-                self.mq135_channel = AnalogIn(self.ads, P0_PIN)
-
-                # BME280 Başlatma (Aynı portu smbus2 ile açıyoruz)
-                self.bus = smbus2.SMBus(I2C_PORT)
-                self.calibration_params = bme280.load_calibration_params(self.bus, BME280_ADDRESS)
-                self.has_hw = True
-
-            except Exception as e:
-                print(f"[Sensör] Donanım başlatma hatası: {e}")
-                self.has_hw = False
-        else:
-            self.has_hw = False
+        self._dead_signal_logged = False
+        self._last_open_error = None
 
     def start(self):
-        self.running = True
-        print("[Sensör] BME280/MQ135 okuma servisi başlatıldı...")
-        self.thread = threading.Thread(target=self._read_loop)
-        self.thread.daemon = True
-        self.thread.start()
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._run, name="sensor-reader", daemon=True
+        )
+        self._thread.start()
+        log.info("BME280/MQ135 okuma servisi baslatildi.")
 
-    def _read_loop(self):
-        while self.running:
-            if self.has_hw:
-                try:
-                    # BME280 Okuma
-                    data = bme280.sample(self.bus, BME280_ADDRESS, self.calibration_params)
+    def _run(self):
+        opened = False
+        consecutive_errors = 0
 
-                    # MQ135 (ADS1115 üzerinden) Okuma
-                    # Voltajı oku (0-5V arası)
-                    voltage = self.mq135_channel.voltage
-                    # Basit bir hava kalitesi indeksi (0-100 arası scale edilebilir)
-                    # Gerçek PPM hesabı için sensör kalibrasyonu gerekir ancak şimdilik ham veri yeterli
-                    air_quality = round((voltage / 5.0) * 100, 1)
+        while not self._stop_event.is_set():
+            if not opened:
+                opened = self._try_open()
+                if not opened:
+                    self._stop_event.wait(SENSOR_REINIT_DELAY)
+                    continue
 
-                    sensor_data = {
-                        "temp": round(data.temperature, 1),
-                        "humidity": round(data.humidity, 1),
-                        "pressure": round(data.pressure, 1),
-                        "air_quality": air_quality,
-                        "gas_voltage": round(voltage, 3)
-                    }
-                    self.conn.emit('sensor_update', sensor_data)
-                except Exception as e:
-                    print(f"[Sensör] Okuma hatası: {e}")
+            try:
+                reading = self._hardware.read()
+            except Exception as exc:
+                consecutive_errors += 1
+                log.warning(
+                    "Okuma hatasi (%d/%d): %s",
+                    consecutive_errors, SENSOR_MAX_CONSECUTIVE_ERRORS, exc,
+                )
+                if consecutive_errors >= SENSOR_MAX_CONSECUTIVE_ERRORS:
+                    log.error("Art arda okuma hatasi; I2C yeniden acilacak.")
+                    self._hardware.close()
+                    opened = False
+                    consecutive_errors = 0
+                    self._stop_event.wait(SENSOR_REINIT_DELAY)
+                    continue
             else:
-                # Mock mod
-                sensor_data = {
-                    "temp": 24.5,
-                    "humidity": 62.0,
-                    "pressure": 1013.2,
-                    "air_quality": 12.5,
-                    "gas_voltage": 0.450
-                }
-                self.conn.emit('sensor_update', sensor_data)
+                if consecutive_errors:
+                    log.info("Sensor okumasi duzeldi.")
+                consecutive_errors = 0
+                self._warn_if_gas_signal_dead(reading["gas_voltage"])
+                self.conn.emit("sensor_update", reading)
 
-            time.sleep(15)
+            self._stop_event.wait(SENSOR_READ_INTERVAL)
+
+    def _try_open(self):
+        try:
+            self._hardware.open()
+            self._last_open_error = None
+            return True
+        except ImportError as exc:
+            message = (
+                f"Donanim kutuphaneleri eksik ({exc}). "
+                "Gelistirme icin SIMULATE_HARDWARE=1 kullanin."
+            )
+        except Exception as exc:
+            message = f"Donanim baslatilamadi: {exc.__class__.__name__}: {exc}"
+
+        # Yeniden deneme her SENSOR_REINIT_DELAY'de olur; ayni hatayi tekrar basma.
+        if message != self._last_open_error:
+            log.error(message)
+            self._last_open_error = message
+        return False
+
+    def _warn_if_gas_signal_dead(self, voltage):
+        if voltage <= _MQ135_DEAD_SIGNAL_VOLTS:
+            if not self._dead_signal_logged:
+                log.warning(
+                    "MQ135 sinyali ~0 V. Sensor beslemesi (VCC/GND) ve AO kablosu "
+                    "kontrol edilmeli; hava kalitesi degeri guvenilmez."
+                )
+                self._dead_signal_logged = True
+        else:
+            self._dead_signal_logged = False
 
     def stop(self):
-        self.running = False
-        if hasattr(self, 'bus'):
-            self.bus.close()
-        print("[Sensör] Servis durduruldu.")
-if __name__ == "__main__":
-    manager = SensorManager()
-    manager.start()
-    try:
-        # Servisin kapanmamasını sağlayan sonsuz döngü
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        manager.stop()
+        self._stop_event.set()
+
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
+
+        self._hardware.close()
+        log.info("Servis durduruldu.")

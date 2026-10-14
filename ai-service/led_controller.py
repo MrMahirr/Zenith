@@ -1,6 +1,9 @@
+"""WS281x LED seridini backend'den gelen komutlara gore suren servis."""
+
+import logging
+import os
 import threading
 import time
-import os
 
 from config import (
     LED_BRIGHTNESS,
@@ -12,163 +15,206 @@ from config import (
     LED_PIN,
 )
 from connection_manager import ConnectionManager
+from led_color import BLACK, clamp_brightness, parse_duration_seconds, parse_hex_color
 
 try:
     from rpi_ws281x import Color, PixelStrip
 
     LIBRARY_AVAILABLE = True
 except ImportError:
+    Color = None
+    PixelStrip = None
     LIBRARY_AVAILABLE = False
 
-    def Color(r, g, b):
-        return (r, g, b)
+log = logging.getLogger("zenith.led")
 
-    PixelStrip = None
-    print("[LED] rpi_ws281x kutuphanesi bulunamadi. Mock mod aktif.")
-
-
-def hex_to_color(hex_str):
-    if not hex_str or not hex_str.startswith("#"):
-        return Color(0, 0, 0)
-
-    hex_str = hex_str.lstrip("#")
-    r, g, b = tuple(int(hex_str[i : i + 2], 16) for i in (0, 2, 4))
-    return Color(r, g, b)
+_SELF_TEST_COLOR = (0, 0, 255)
+_SELF_TEST_SECONDS = 1.0
+_EXPIRY_CHECK_SECONDS = 0.1
 
 
 class LEDController:
+    """Rengi/parlakligi tutar ve donanima yazar.
+
+    Donanim yoksa (kutuphane eksik ya da root yetkisi yok) komutlar yine
+    islenir ve durum tutulur; yalnizca fiziksel cikis uretilmez.
+    """
+
     def __init__(self):
         self.conn = ConnectionManager()
-        self.running = False
-        self.thread = None
-        self.current_color = Color(0, 0, 0)
-        self.target_color = Color(0, 0, 0)
-        self.animation_end_time = 0
-        self.strip = None
         self.has_hardware = False
-        self.hardware_error = None
-        self._lock = threading.Lock()
+
+        self._strip = None
+        self._lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self._thread = None
+
+        self._color = BLACK
+        self._brightness = LED_BRIGHTNESS
+        self._expires_at = 0.0  # time.monotonic() cinsinden; 0 = sure siniri yok
+        self._last_write_error = None
 
         self._initialize_hardware()
+
         self.conn.on("led_command", self._handle_command)
+        self.conn.on("led_state_sync", self._handle_state_sync)
+        self.conn.on_connect(self._request_state)
+
+    # --- Donanim -------------------------------------------------------------
 
     def _initialize_hardware(self):
         if not LIBRARY_AVAILABLE:
+            log.warning("rpi_ws281x kutuphanesi bulunamadi; fiziksel LED surulmeyecek.")
             return
 
         if hasattr(os, "geteuid") and os.geteuid() != 0:
-            self.hardware_error = PermissionError(
-                "LED servisi root olmadan calisiyor; /dev/mem erisimi yok."
-            )
-            print("[LED] Root yetkisi yok. Mock mod aktif; fiziksel LED surulmeyecek.")
+            log.warning("Root yetkisi yok (/dev/mem erisimi gerekir); fiziksel LED surulmeyecek.")
             return
 
         try:
-            self.strip = PixelStrip(
+            strip = PixelStrip(
                 LED_COUNT,
                 LED_PIN,
                 LED_FREQ_HZ,
                 LED_DMA,
                 LED_INVERT,
-                LED_BRIGHTNESS,
+                self._brightness,
                 LED_CHANNEL,
             )
-            self.strip.begin()
-            self.has_hardware = True
-            print(f"[LED] Donanim hazir. GPIO={LED_PIN}, LED_COUNT={LED_COUNT}")
+            strip.begin()
         except Exception as exc:
-            self.strip = None
-            self.has_hardware = False
-            self.hardware_error = exc
-            print(
-                "[LED] Donanim baslatilamadi, mock moduna geciliyor: "
-                f"{exc.__class__.__name__}: {exc}"
+            log.error(
+                "Donanim baslatilamadi: %s: %s (ses cikisinin PWM ile cakismasi "
+                "icin config.txt'te 'dtparam=audio=off' olmali)",
+                exc.__class__.__name__, exc,
             )
-            print(
-                "[LED] Not: rpi_ws281x genelde /dev/mem erisimi icin root yetkisi ister."
-            )
+            return
+
+        self._strip = strip
+        self.has_hardware = True
+        log.info("Donanim hazir. GPIO=%s, LED_COUNT=%s", LED_PIN, LED_COUNT)
+
+    def _render(self):
+        """Mevcut renk ve parlakligi seride gosterir. `_lock` altinda cagrilmali."""
+        if self._strip is None:
+            return
+
+        try:
+            packed = Color(*self._color)
+            self._strip.setBrightness(self._brightness)
+            for index in range(self._strip.numPixels()):
+                self._strip.setPixelColor(index, packed)
+            self._strip.show()
+            self._last_write_error = None
+        except Exception as exc:
+            message = f"{exc.__class__.__name__}: {exc}"
+            if message != self._last_write_error:  # ayni hatayi tekrar tekrar basma
+                log.error("Donanim yazma hatasi: %s", message)
+                self._last_write_error = message
+
+    # --- Backend olaylari ----------------------------------------------------
+
+    def _request_state(self):
+        """Servis (yeniden) baglandiginda backend'deki son LED durumunu ister."""
+        self.conn.emit("led_get_state")
 
     def _handle_command(self, data):
-        print(f"[LED] Komut alindi: {data}")
-        color_hex = data.get("color", "#000000")
-        color = hex_to_color(color_hex)
-        duration = data.get("duration", 0)
-        brightness = data.get("brightness")
-
-        self.target_color = color
-
-        if duration > 0:
-            self.animation_end_time = time.time() + (duration / 1000.0)
-        else:
-            self.animation_end_time = 0
-
-        self._set_color(self.target_color, brightness)
-        
-        # Backend'e durum raporu gonder (istege bagli)
-        self.conn.emit("led_state_report", {
-            "color": color_hex,
-            "brightness": brightness if brightness is not None else LED_BRIGHTNESS,
-            "isOn": color_hex != "#000000" and color_hex != "#000"
-        })
-
-    def _set_color(self, color, brightness=None):
-        self.current_color = color
-
-        if not self.has_hardware or self.strip is None:
+        if not isinstance(data, dict):
+            log.warning("Gecersiz led_command yuku: %r", data)
             return
+
+        color = parse_hex_color(data.get("color"))
+        if color is None:
+            log.warning("Gecersiz renk, komut yok sayildi: %r", data.get("color"))
+            return
+
+        brightness = clamp_brightness(data.get("brightness"))
+        duration = parse_duration_seconds(data.get("duration"))
 
         with self._lock:
-            try:
-                if brightness is not None:
-                    # RPi WS281x kutuphanesinde setBrightness mevcuttur
-                    self.strip.setBrightness(int(brightness))
-                    
-                for i in range(self.strip.numPixels()):
-                    self.strip.setPixelColor(i, color)
-                self.strip.show()
-            except Exception as exc:
-                self.has_hardware = False
-                self.hardware_error = exc
-                print(f"[LED] Donanim yazma hatasi (Muhtemelen DMA/PWM cakismasi): {exc}")
-                print("[LED] Ipucu: Raspberry Pi'da ses (Audio) cikisi PWM ile cakısıyor olabilir.")
-                print("[LED] /boot/config.txt icinde 'dtparam=audio=on' satirini 'off' yapmayi deneyin.")
+            self._color = color
+            if brightness is not None:
+                self._brightness = brightness
+            self._expires_at = time.monotonic() + duration if duration > 0 else 0.0
+            self._render()
 
-    def start(self):
-        self.running = True
-        print("[LED] Kontrol servisi baslatildi...")
-        
-        # Donanim saglik testi (Self-test)
-        self._self_test()
+        log.debug("Komut uygulandi: renk=%s parlaklik=%s sure=%.1fs", color, brightness, duration)
 
-        self.thread = threading.Thread(target=self._anim_loop, daemon=True)
-        self.thread.start()
-
-    def _self_test(self):
-        """Baslangicta donanimi test etmek icin kisa sureli mavi yakar."""
-        if not self.has_hardware:
-            print("[LED] Self-test atlandi: Donanim erisimi yok.")
+    def _handle_state_sync(self, data):
+        """Backend durumuyla senkronize olur (parlaklik degisimi, yeniden baglanma)."""
+        if not isinstance(data, dict):
             return
 
-        print("[LED] Self-test baslatiliyor (Mavi goz kirpma)...")
-        test_color = Color(0, 0, 255) # Mavi
-        self._set_color(test_color)
-        time.sleep(1.0)
-        self._set_color(Color(0, 0, 0))
-        print("[LED] Self-test tamamlandi.")
+        brightness = clamp_brightness(data.get("brightness"))
+        color = parse_hex_color(data.get("color"))
+        manual = data.get("mode") == "manual"
+        is_on = data.get("isOn")
 
-    def _anim_loop(self):
-        while self.running:
-            if self.animation_end_time > 0 and time.time() > self.animation_end_time:
-                self._set_color(Color(0, 0, 0))
-                self.animation_end_time = 0
+        with self._lock:
+            if brightness is not None:
+                self._brightness = brightness
 
-            time.sleep(0.5)
+            # Otomatik modda renk postur/mod olaylarindan gelir; yalnizca
+            # manuel modda backend'deki renk tek dogru kaynaktir.
+            if manual and is_on is False:
+                self._color = BLACK
+                self._expires_at = 0.0
+            elif manual and is_on and color is not None:
+                self._color = color
+                self._expires_at = 0.0
+
+            self._render()
+
+    # --- Yasam dongusu -------------------------------------------------------
+
+    def start(self):
+        self._stop_event.clear()
+        self._self_test()
+
+        self._thread = threading.Thread(
+            target=self._expiry_loop, name="led-expiry", daemon=True
+        )
+        self._thread.start()
+        log.info("Kontrol servisi baslatildi.")
+
+    def _self_test(self):
+        """Acilista seridin calistigini gosteren kisa mavi yanip sonme."""
+        if not self.has_hardware:
+            log.info("Self-test atlandi: donanim erisimi yok.")
+            return
+
+        log.info("Self-test: mavi yanip sonme.")
+        with self._lock:
+            previous = self._color
+            self._color = _SELF_TEST_COLOR
+            self._render()
+
+        self._stop_event.wait(_SELF_TEST_SECONDS)
+
+        with self._lock:
+            # Test sirasinda yeni bir komut geldiyse onu ezme.
+            if self._color == _SELF_TEST_COLOR:
+                self._color = previous
+            self._render()
+
+    def _expiry_loop(self):
+        """Sureli komutlarin (ornegin 2 sn yesil) suresi dolunca seridi sondurur."""
+        while not self._stop_event.wait(_EXPIRY_CHECK_SECONDS):
+            with self._lock:
+                if self._expires_at and time.monotonic() >= self._expires_at:
+                    self._color = BLACK
+                    self._expires_at = 0.0
+                    self._render()
 
     def stop(self):
-        self.running = False
-        self._set_color(Color(0, 0, 0))
+        self._stop_event.set()
 
-        if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=1.5)
+        with self._lock:
+            self._color = BLACK
+            self._expires_at = 0.0
+            self._render()
 
-        print("[LED] Servis durduruldu.")
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=1.5)
+
+        log.info("Servis durduruldu.")

@@ -1,88 +1,158 @@
+"""Zenith AI servisi yapilandirmasi.
+
+Tum degerler ortam degiskenlerinden (veya .env dosyasindan) okunur. Gecersiz bir
+deger verilirse uyari loglanir ve varsayilan deger kullanilir.
+"""
+
+import logging
 import os
-import urllib.request
-from urllib.parse import urlsplit, urlunsplit
 
 try:
     from dotenv import load_dotenv
-except ImportError:
+except ImportError:  # python-dotenv kurulu degilse ortam degiskenleri yeterli
     def load_dotenv(*_args, **_kwargs):
-        print("[Config] python-dotenv bulunamadi. Ortam degiskenleri .env olmadan okunacak.")
+        return False
 
 
 load_dotenv()
 
+_log = logging.getLogger("zenith.config")
+
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_FALSE_VALUES = {"0", "false", "no", "off"}
+
+
+def _raw(name):
+    value = os.getenv(name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _to_int(raw):
+    """Ondalik veya 0x onekli onaltilik tamsayiyi cevirir."""
+    return int(raw, 16) if raw.lower().startswith("0x") else int(raw)
+
+
+def _parse_number(name, default, cast, minimum, maximum):
+    raw = _raw(name)
+    if raw is None:
+        return default
+
+    try:
+        value = cast(raw)
+    except ValueError:
+        _log.warning("%s gecersiz (%r); varsayilan kullaniliyor: %r", name, raw, default)
+        return default
+
+    if (minimum is not None and value < minimum) or (
+        maximum is not None and value > maximum
+    ):
+        _log.warning(
+            "%s aralik disi (%r, izin verilen %r..%r); varsayilan kullaniliyor: %r",
+            name, value, minimum, maximum, default,
+        )
+        return default
+
+    return value
+
+
+def env_str(name, default=""):
+    raw = _raw(name)
+    return default if raw is None else raw
+
+
+def env_int(name, default, minimum=None, maximum=None):
+    return _parse_number(name, default, _to_int, minimum, maximum)
+
+
+def env_float(name, default, minimum=None, maximum=None):
+    return _parse_number(name, default, float, minimum, maximum)
+
+
+def env_bool(name, default=False):
+    raw = _raw(name)
+    if raw is None:
+        return default
+
+    lowered = raw.lower()
+    if lowered in _TRUE_VALUES:
+        return True
+    if lowered in _FALSE_VALUES:
+        return False
+
+    _log.warning("%s gecersiz (%r); varsayilan kullaniliyor: %r", name, raw, default)
+    return default
+
+
+def env_url_list(*names):
+    """Verilen ortam degiskenlerindeki bos olmayan adresleri sirayi bozmadan tekilleştirir."""
+    urls = []
+    for name in names:
+        value = _raw(name)
+        if value and value not in urls:
+            urls.append(value)
+    return tuple(urls)
+
 
 def _default_health_url(base_url):
+    from urllib.parse import urlsplit, urlunsplit
+
     parsed = urlsplit(base_url)
     return urlunsplit((parsed.scheme, parsed.netloc, "/api/health", "", ""))
 
 
-def _get_camera_candidates():
-    candidates = [
-        os.getenv("CAMERA_URL", "").strip(),
-        os.getenv("CAMERA_URL_1", "").strip(),
-        os.getenv("CAMERA_URL_2", "").strip(),
-    ]
+# --- Genel -------------------------------------------------------------------
+LOG_LEVEL = env_str("LOG_LEVEL", "INFO").upper()
+# Gercek donanim yokken sahte sensor verisi uretir. Yalnizca gelistirme icindir;
+# uretimde kapali kalmali, aksi halde sahte olcumler veritabanina yazilir.
+SIMULATE_HARDWARE = env_bool("SIMULATE_HARDWARE", False)
 
-    unique_candidates = []
-    for url in candidates:
-        if url and url not in unique_candidates:
-            unique_candidates.append(url)
-    return unique_candidates
+# --- Backend baglantisi ------------------------------------------------------
+BACKEND_URL = env_str("BACKEND_URL", "http://127.0.0.1:3000")
+BACKEND_HEALTH_URL = env_str("BACKEND_HEALTH_URL", _default_health_url(BACKEND_URL))
+BACKEND_RETRY_INTERVAL = env_float("BACKEND_RETRY_INTERVAL", 2.0, minimum=0.1)
+BACKEND_WAIT_TIMEOUT = env_float("BACKEND_WAIT_TIMEOUT", 0.0, minimum=0.0)
 
-
-def _get_active_camera_url():
-    """Env'deki kamera URL'lerini dener, aktif olani dondurur."""
-    candidates = _get_camera_candidates()
-
-    if not candidates:
-        fallback_url = "http://127.0.0.1:4747/video"
-        print("[Config] UYARI: .env icinde kamera URL tanimi yok. Varsayilan URL kullaniliyor.")
-        return fallback_url
-
-    print("[Config] Aktif kamera araniyor...")
-
-    for url in candidates:
-        try:
-            with urllib.request.urlopen(url, timeout=1.0) as response:
-                if response.getcode() == 200:
-                    print(f"[Config] Kamera bulundu: {url}")
-                    return url
-        except Exception:
-            continue
-
-    print(f"[Config] UYARI: Hicbir kamera aktif degil. Ilk .env kaydi kullaniliyor: {candidates[0]}")
-    return candidates[0]
-
-
-BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:3000")
-BACKEND_HEALTH_URL = os.getenv(
-    "BACKEND_HEALTH_URL",
-    _default_health_url(BACKEND_URL),
+# --- Kamera ve postur --------------------------------------------------------
+# Kaynaklar sirayla denenir; baglanti koparsa bir sonraki adaya gecilir.
+CAMERA_URLS = env_url_list("CAMERA_URL", "CAMERA_URL_1", "CAMERA_URL_2") or (
+    "http://127.0.0.1:4747/video",
 )
-BACKEND_RETRY_INTERVAL = float(os.getenv("BACKEND_RETRY_INTERVAL", "2"))
-BACKEND_WAIT_TIMEOUT = float(os.getenv("BACKEND_WAIT_TIMEOUT", "0"))
+CAMERA_CONNECT_TIMEOUT = env_float("CAMERA_CONNECT_TIMEOUT", 3.0, minimum=0.5)
+CAMERA_RECONNECT_DELAY = env_float("CAMERA_RECONNECT_DELAY", 2.0, minimum=0.1)
 
-CAMERA_URL = _get_active_camera_url()
-POSTURE_THRESHOLD = float(os.getenv("POSTURE_THRESHOLD", "0.15"))
-POSTURE_EVENT_INTERVAL = float(os.getenv("POSTURE_EVENT_INTERVAL", "5"))
-CAMERA_RECONNECT_DELAY = float(os.getenv("CAMERA_RECONNECT_DELAY", "2"))
-CAMERA_FRAME_EMIT_INTERVAL = float(os.getenv("CAMERA_FRAME_EMIT_INTERVAL", "0.2"))
+MJPEG_HOST = env_str("MJPEG_HOST", "0.0.0.0")
+MJPEG_PORT = env_int("MJPEG_PORT", 5001, minimum=1, maximum=65535)
 
-I2C_PORT = int(os.getenv("I2C_PORT", "3"))
-BME280_ADDRESS = int(os.getenv("BME280_ADDRESS", "0x76"), 16)
+POSTURE_THRESHOLD = env_float("POSTURE_THRESHOLD", 0.15)
+POSTURE_EVENT_INTERVAL = env_float("POSTURE_EVENT_INTERVAL", 5.0, minimum=0.0)
+# MediaPipe her N. karede bir calistirilir (CPU tasarrufu).
+POSTURE_ANALYSIS_FRAME_STEP = env_int("POSTURE_ANALYSIS_FRAME_STEP", 3, minimum=1)
+# Burun/omuz noktalarinin gorunurluk esigi; altindaysa olcum guvenilmez sayilir.
+POSTURE_MIN_VISIBILITY = env_float("POSTURE_MIN_VISIBILITY", 0.5, minimum=0.0, maximum=1.0)
 
-LED_COUNT = int(os.getenv("LED_COUNT", "60"))
-LED_PIN = int(os.getenv("LED_PIN", "18"))
+# --- Sensorler ---------------------------------------------------------------
+I2C_PORT = env_int("I2C_PORT", 3, minimum=0)
+BME280_ADDRESS = env_int("BME280_ADDRESS", 0x76, minimum=0x03, maximum=0x77)
+SENSOR_READ_INTERVAL = env_float("SENSOR_READ_INTERVAL", 15.0, minimum=1.0)
+# Art arda bu kadar okuma hatasindan sonra I2C yeniden acilir.
+SENSOR_MAX_CONSECUTIVE_ERRORS = env_int("SENSOR_MAX_CONSECUTIVE_ERRORS", 3, minimum=1)
+SENSOR_REINIT_DELAY = env_float("SENSOR_REINIT_DELAY", 10.0, minimum=1.0)
+
+# --- LED ---------------------------------------------------------------------
+LED_COUNT = env_int("LED_COUNT", 60, minimum=1)
+LED_PIN = env_int("LED_PIN", 18, minimum=0)
 LED_FREQ_HZ = 800000
-LED_DMA = int(os.getenv("LED_DMA", "5"))
-LED_BRIGHTNESS = int(os.getenv("LED_BRIGHTNESS", "128"))
+LED_DMA = env_int("LED_DMA", 5, minimum=0)
+LED_BRIGHTNESS = env_int("LED_BRIGHTNESS", 128, minimum=0, maximum=255)
 LED_INVERT = False
 LED_CHANNEL = 0
 
-NFC_MODES = {
-    int(os.getenv("NFC_CARD_1", "83749274923")): "CODING",
-    int(os.getenv("NFC_CARD_2", "29384729384")): "FOCUS",
-    int(os.getenv("NFC_CARD_3", "11223344556")): "RELAX",
-    int(os.getenv("NFC_CARD_4", "99887766554")): "MEETING",
-}
+# --- NFC ---------------------------------------------------------------------
+# mfrc522 kutuphanesi kart yokken her sorguda ~2000 SPI okumasi yapar (~90 ms);
+# aralik kisaldikca CPU artar. 0.5 sn, dokunarak okutma icin yeterince duyarlidir.
+NFC_POLL_INTERVAL = env_float("NFC_POLL_INTERVAL", 0.5, minimum=0.05)
+# Ayni kart, en son gorulmesinden bu kadar saniye gecmeden tekrar bildirilmez.
+NFC_REPEAT_COOLDOWN = env_float("NFC_REPEAT_COOLDOWN", 3.0, minimum=0.0)
