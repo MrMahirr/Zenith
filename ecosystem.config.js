@@ -71,6 +71,39 @@ module.exports = {
       restart_delay: 5000,
       kill_timeout: 5000,
       max_memory_restart: '100M',
+    },
+
+    // ──────────────────────────────────────────────
+    // 5. NFC – MFRC522 (SPI0). Backend'e bağımlı.
+    // ──────────────────────────────────────────────
+    {
+      name: 'zenith-nfc',
+      cwd: '/home/mahir/Zenith/ai-service',
+      script: '/home/mahir/miniforge3/envs/zenith-ai/bin/python',
+      args: 'main.py --service nfc',
+      interpreter: 'none',
+      exec_mode: 'fork',
+      autorestart: true,
+      restart_delay: 3000,
+      kill_timeout: 5000,
+      max_memory_restart: '100M',
+    },
+
+    // ──────────────────────────────────────────────
+    // 6. LED – WS281x (GPIO18). rpi_ws281x DMA erişimi için root
+    //    gerektirir; bu yüzden sudo ile başlatılır (mahir şifresiz sudo).
+    // ──────────────────────────────────────────────
+    {
+      name: 'zenith-led',
+      cwd: '/home/mahir/Zenith/ai-service',
+      script: 'sudo',
+      args: '/home/mahir/miniforge3/envs/zenith-ai/bin/python main.py --service led',
+      interpreter: 'none',
+      exec_mode: 'fork',
+      autorestart: true,
+      restart_delay: 3000,
+      kill_timeout: 5000,
+      max_memory_restart: '100M',
     }
   ],
 };

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Zenith Kiosk
+Comment=Zenith arayüzünü tam ekran kiosk modunda açar
+Exec=/home/mahir/Zenith/kiosk.sh
+X-GNOME-Autostart-enabled=true
