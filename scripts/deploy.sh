@@ -54,14 +54,19 @@ run() {
   fi
 }
 
-# ssh ile (etkileşimsiz) çalışırken nvm PATH'e eklenmemiş olabilir.
+# Kullanıcının nvm varsayılan Node sürümünü seçer. Etkileşimsiz çalışmada (ssh,
+# cron, systemd) nvm PATH'te olmaz; sistemde eski bir /usr/bin/node ya da farklı
+# sürümde pm2 bulunsa bile yanlış araç zincirine düşmemek için her zaman nvm
+# kullanılır.
 load_node() {
-  if command -v node >/dev/null 2>&1 && command -v pm2 >/dev/null 2>&1; then
-    return
-  fi
   export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  [ -s "$NVM_DIR/nvm.sh" ] || return 0
+
+  set +u
   # shellcheck disable=SC1091
-  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
+  . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+  nvm use --silent default >/dev/null 2>&1 || true
+  set -u
 }
 
 hash_of() { sha256sum "$@" | sha256sum | cut -d' ' -f1; }

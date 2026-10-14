@@ -72,8 +72,14 @@ boot_config() {
 
 load_nvm() {
   export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  [ -s "$NVM_DIR/nvm.sh" ] || return 0
+
+  set +u
   # shellcheck disable=SC1091
-  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+  . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+  # Sistemdeki eski /usr/bin/node yerine kullanıcının nvm sürümü seçilsin.
+  nvm use --silent default >/dev/null 2>&1 || true
+  set -u
 }
 
 # ---------------------------------------------------------------------------
