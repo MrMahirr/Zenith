@@ -1,0 +1,114 @@
+.camera-address {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+}
+
+.camera-address__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.camera-address__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.camera-address__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--text-muted);
+}
+
+.camera-address__status--connected {
+  color: var(--color-success);
+}
+
+.camera-address__status--connected .camera-address__status-dot {
+  background: var(--color-success);
+}
+
+.camera-address__status--disconnected {
+  color: var(--color-danger);
+}
+
+.camera-address__status--disconnected .camera-address__status-dot {
+  background: var(--color-danger);
+}
+
+.camera-address__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.camera-address__toggle {
+  flex: none;
+  align-self: flex-start;
+  padding: 6px 12px;
+}
+
+.camera-address__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.camera-address__input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.camera-address__input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.camera-address__input:disabled {
+  opacity: 0.6;
+}
+
+.camera-address__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.camera-address__actions .settings-btn {
+  flex: 1 1 auto;
+}
+
+.camera-address__actions .settings-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.camera-address__feedback {
+  margin: 0;
+  font-size: 12px;
+}
+
+.camera-address__feedback--success {
+  color: var(--color-success);
+}
+
+.camera-address__feedback--error {
+  color: var(--color-danger);
+}

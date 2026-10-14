@@ -7,6 +7,7 @@ import cv2
 import mediapipe as mp
 
 from camera_source import CameraSource
+from camera_urls import resolve_camera_urls
 from config import (
     CAMERA_CONNECT_TIMEOUT,
     CAMERA_RECONNECT_DELAY,
@@ -52,6 +53,7 @@ class PostureAnalyzer:
             CAMERA_CONNECT_TIMEOUT,
             CAMERA_RECONNECT_DELAY,
             wants_frames=self._needs_frames,
+            on_state_change=self._publish_camera_status,
         )
         self._output = FrameBuffer()
         self._server = MjpegServer(
@@ -79,6 +81,8 @@ class PostureAnalyzer:
         self._last_landmarks = None
 
         self.conn.on("mode_changed", self._handle_mode_change)
+        self.conn.on("camera_config", self._handle_camera_config)
+        self.conn.on_connect(self._on_backend_connected)
 
     # --- Yasam dongusu -------------------------------------------------------
 
@@ -117,6 +121,23 @@ class PostureAnalyzer:
             log.info("Postur analizi aktif: %s", mode)
         else:
             log.info("Serbest mod aktif. Postur analizi devre disi.")
+
+    def _handle_camera_config(self, payload):
+        """Backend'den gelen kamera adresi ayarini uygular (null = varsayilanlara don)."""
+        runtime_url = payload.get("url") if isinstance(payload, dict) else None
+        urls = resolve_camera_urls(runtime_url, CAMERA_URLS)
+
+        if self._camera.set_urls(urls):
+            origin = "ayarli adres" if runtime_url else "varsayilan adresler"
+            log.info("Kamera kaynagi degisti: %s kullaniliyor.", origin)
+
+    def _on_backend_connected(self):
+        """(Yeniden) baglaninca guncel adresi ister ve mevcut kamera durumunu bildirir."""
+        self.conn.emit("camera_config_subscribe")
+        self._publish_camera_status(self._camera.connected)
+
+    def _publish_camera_status(self, connected):
+        self.conn.emit("camera_status", {"connected": bool(connected)})
 
     # --- Islem dongusu -------------------------------------------------------
 

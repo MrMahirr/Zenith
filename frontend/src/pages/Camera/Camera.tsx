@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePosture } from '../../hooks/usePosture';
+import { CameraAddressCard } from './components/CameraAddressCard';
 import './Camera.css';
 
 // Standart Çözünürlük Seçenekleri (Değerler Genişlik (width) pikselleridir, etiketler standart yükseklik isimlendirmesidir)
@@ -201,6 +202,8 @@ export function Camera() {
               ))}
             </div>
           </div>
+
+          <CameraAddressCard />
         </div>
       </main>
     </div>

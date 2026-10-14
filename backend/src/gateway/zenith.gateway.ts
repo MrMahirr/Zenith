@@ -6,13 +6,18 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { Subscription } from 'rxjs';
 import { SensorService } from '../sensor/sensor.service';
 import { PostureService } from '../posture/posture.service';
 import { ModeService } from '../mode/mode.service';
 import { NfcService } from '../nfc/nfc.service';
 import { LedService } from '../led/led.service';
+import { CameraService } from '../camera/camera.service';
+
+/** Kamera adresi değişikliklerini yalnızca kamera servisine ileten oda. */
+const CAMERA_CONFIG_ROOM = 'camera-config';
 
 @WebSocketGateway({
   cors: {
@@ -20,7 +25,7 @@ import { LedService } from '../led/led.service';
   },
 })
 export class ZenithGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
 {
   private readonly postureLedModes = new Set(['CODING', 'FOCUS', 'RELAX', 'MEETING']);
 
@@ -29,16 +34,28 @@ export class ZenithGateway
 
   private readonly logger = new Logger(ZenithGateway.name);
 
+  private cameraConfigSubscription?: Subscription;
+  private cameraStatus: { connected: boolean } | null = null;
+
   constructor(
     private readonly sensorService: SensorService,
     private readonly postureService: PostureService,
     private readonly modeService: ModeService,
     private readonly nfcService: NfcService,
     private readonly ledService: LedService,
+    private readonly cameraService: CameraService,
   ) {}
 
   afterInit() {
     this.logger.log('Zenith WebSocket Gateway started');
+
+    this.cameraConfigSubscription = this.cameraService.configChanged$.subscribe(
+      (config) => this.server.to(CAMERA_CONFIG_ROOM).emit('camera_config', config),
+    );
+  }
+
+  onModuleDestroy() {
+    this.cameraConfigSubscription?.unsubscribe();
   }
 
   handleConnection(client: Socket) {
@@ -46,6 +63,10 @@ export class ZenithGateway
     const currentMode = this.modeService.getCurrentMode();
     client.emit('mode_changed', currentMode);
     this.emitPostureAvailability(currentMode.mode, client);
+
+    if (this.cameraStatus) {
+      client.emit('camera_status', this.cameraStatus);
+    }
   }
 
   handleDisconnect(client: Socket) {
@@ -101,6 +122,32 @@ export class ZenithGateway
         duration: payload.kambur_mu ? 0 : 2000,
         brightness: this.ledService.getState().brightness,
       });
+    }
+  }
+
+  /** Kamera servisi bağlanınca abone olur ve güncel adresi alır. */
+  @SubscribeMessage('camera_config_subscribe')
+  async handleCameraConfigSubscribe(client: Socket) {
+    await client.join(CAMERA_CONFIG_ROOM);
+    client.emit('camera_config', { url: await this.cameraService.getUrl() });
+  }
+
+  /** Kamera servisinin bağlantı durumu; adres içermez, tüm arayüzlere yayınlanır. */
+  @SubscribeMessage('camera_status')
+  handleCameraStatus(_client: Socket, payload: { connected?: unknown }) {
+    if (typeof payload?.connected !== 'boolean') {
+      return;
+    }
+
+    this.cameraStatus = { connected: payload.connected };
+    this.server.emit('camera_status', this.cameraStatus);
+  }
+
+  /** Arayüz açıldığında bilinen son kamera durumunu ister. */
+  @SubscribeMessage('camera_status_get')
+  handleCameraStatusGet(client: Socket) {
+    if (this.cameraStatus) {
+      client.emit('camera_status', this.cameraStatus);
     }
   }
 

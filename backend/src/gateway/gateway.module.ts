@@ -6,9 +6,17 @@ import { ModeModule } from '../mode/mode.module';
 import { NfcModule } from '../nfc/nfc.module';
 
 import { LedModule } from '../led/led.module';
+import { CameraModule } from '../camera/camera.module';
 
 @Module({
-  imports: [SensorModule, PostureModule, ModeModule, NfcModule, LedModule],
+  imports: [
+    SensorModule,
+    PostureModule,
+    ModeModule,
+    NfcModule,
+    LedModule,
+    CameraModule,
+  ],
   providers: [ZenithGateway],
   exports: [ZenithGateway],
 })

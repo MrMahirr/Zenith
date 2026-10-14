@@ -27,18 +27,34 @@ class CameraSource:
     `wants_frames` False dondurdugu surece (analiz kapali ve yayini izleyen yok)
     kareler cozulmez; akis yalnizca bagli kalmasi icin okunur. Boylece bos
     dururken CPU harcanmaz.
+
+    Adresler `set_urls` ile servis calisirken degistirilebilir; kaynak yeni
+    adrese hemen gecer. `on_state_change(connected)` baglanti durumu her
+    degistiginde cagrilir.
     """
 
-    def __init__(self, urls, connect_timeout, reconnect_delay, wants_frames=None):
+    def __init__(
+        self,
+        urls,
+        connect_timeout,
+        reconnect_delay,
+        wants_frames=None,
+        on_state_change=None,
+    ):
         if not urls:
             raise ValueError("En az bir kamera adresi gerekli.")
 
         self.frames = FrameBuffer()
         self._urls = tuple(urls)
         self._url_index = 0
+        self._urls_lock = threading.Lock()
         self._connect_timeout = connect_timeout
         self._reconnect_delay = reconnect_delay
         self._wants_frames = wants_frames or (lambda: True)
+        self._on_state_change = on_state_change
+        self._reconnect_requested = threading.Event()
+        # Yeniden baglanma beklemesini durdurma ya da adres degisimiyle bolmek icin.
+        self._wake = threading.Event()
 
         self._stop_event = threading.Event()
         self._connected = threading.Event()
@@ -55,7 +71,28 @@ class CameraSource:
 
     @property
     def active_url(self):
-        return self._urls[self._url_index] if self.connected else None
+        if not self.connected:
+            return None
+        with self._urls_lock:
+            return self._urls[self._url_index]
+
+    def set_urls(self, urls):
+        """Aday adresleri degistirir ve yeni adrese hemen gecer. Degisim olduysa True doner."""
+        urls = tuple(urls)
+        if not urls:
+            raise ValueError("En az bir kamera adresi gerekli.")
+
+        with self._urls_lock:
+            if urls == self._urls:
+                return False
+            self._urls = urls
+            self._url_index = 0
+            self._logged_failures.clear()
+
+        log.info("Kamera adresleri guncellendi (%d aday).", len(urls))
+        self._reconnect_requested.set()
+        self._wake.set()
+        return True
 
     @property
     def frame_size(self):
@@ -73,14 +110,15 @@ class CameraSource:
 
     def stop(self):
         self._stop_event.set()
+        self._wake.set()
         if self._thread is not None:
             self._thread.join(timeout=self._connect_timeout + 1.0)
 
     def _run(self):
         while not self._stop_event.is_set():
-            url = self._urls[self._url_index]
+            with self._urls_lock:
+                url = self._urls[self._url_index]
             failure = None
-            was_connected = False
 
             try:
                 self._stream(url)
@@ -95,16 +133,32 @@ class CameraSource:
             if self._stop_event.is_set():
                 break
 
-            # Baglanti kurulamadi ya da koptu: bir sonraki adaya gec.
-            self._url_index = (self._url_index + 1) % len(self._urls)
-            self._stop_event.wait(self._reconnect_delay)
+            if self._reconnect_requested.is_set():
+                # Adresler degisti: beklemeden yenisine gec.
+                self._reconnect_requested.clear()
+                self._wake.clear()
+                continue
+
+            # Baglanti kurulamadi ya da koptu: bir sonraki adaya gec ve bekle.
+            with self._urls_lock:
+                self._url_index = (self._url_index + 1) % len(self._urls)
+            self._wake.wait(self._reconnect_delay)
+            self._wake.clear()
+            # Bekleme adres degisimiyle bittiyse set_urls indeksi zaten sifirladi.
+            self._reconnect_requested.clear()
 
     def _stream(self, url):
         with urllib.request.urlopen(url, timeout=self._connect_timeout) as stream:
+            if self._reconnect_requested.is_set():
+                return  # baglanirken adres degisti; bu baglantiyi "bagli" sayma
+
             self._set_connected(True, url)
             buffer = bytearray()
 
-            while not self._stop_event.is_set():
+            while (
+                not self._stop_event.is_set()
+                and not self._reconnect_requested.is_set()
+            ):
                 chunk = stream.read(_READ_CHUNK)
                 if not chunk:
                     raise ConnectionError("Kamera stream veri gondermeyi durdurdu.")
@@ -163,6 +217,17 @@ class CameraSource:
             self.frames.clear()
             detail = f" ({reason.__class__.__name__}: {reason})" if reason else ""
             log.warning("Kamera baglantisi kesildi: %s%s", url, detail)
+
+        self._notify_state_change(connected)
+
+    def _notify_state_change(self, connected):
+        if self._on_state_change is None:
+            return
+
+        try:
+            self._on_state_change(connected)
+        except Exception:
+            log.exception("Kamera durum callback'i hata verdi")
 
     def _log_connect_failure(self, url, exc):
         message = f"{exc.__class__.__name__}: {exc}"
